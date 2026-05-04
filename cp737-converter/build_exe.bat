@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 title Build CP737 Converter EXE
 echo ============================================
 echo  Build CP737_Converter.exe  -  ILS1100
