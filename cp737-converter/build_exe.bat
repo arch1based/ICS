@@ -22,11 +22,19 @@ if errorlevel 1 (
 )
 
 echo [3/3] Δημιουργια EXE...
+
+if exist logo.png (
+    set LOGO_FLAG=--add-data "logo.png;."
+) else (
+    echo ΠΡΟΕΙΔΟΠΟΙΗΣΗ: logo.png δεν βρεθηκε - συνεχιζεται χωρις logo.
+    set LOGO_FLAG=
+)
+
 pyinstaller ^
     --onefile ^
     --noconsole ^
     --name "CP737_Converter" ^
-    --add-data "logo.png;." ^
+    %LOGO_FLAG% ^
     %ICON_FLAG% ^
     cp737_watcher_gui.py
 
