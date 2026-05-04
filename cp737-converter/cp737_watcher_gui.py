@@ -24,6 +24,13 @@ CONFIG_PATH     = Path(os.environ.get("APPDATA", ".")) / "ICS" / "cp737_converte
 # ───────────────────────────────────────────────────────────────────────────
 
 
+def resource_path(filename: str) -> Path:
+    """Βρίσκει αρχείο είτε σε development είτε μέσα στο PyInstaller exe."""
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / filename
+    return Path(__file__).parent / filename
+
+
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         try:
@@ -61,39 +68,69 @@ class App(tk.Tk):
             self.watch_var.set(cfg["folder"])
             self.after(600, self.start)
 
-    # ── Εικονίδιο ────────────────────────────────────────────────────────
+    # ── Εικονίδιο παραθύρου ──────────────────────────────────────────────
     def _set_icon(self):
+        logo_file = resource_path("logo.png")
+        if logo_file.exists():
+            try:
+                img = tk.PhotoImage(file=str(logo_file))
+                # Σμίκρυνση ανάλογα με το μέγεθος
+                w, h = img.width(), img.height()
+                factor = max(1, max(w, h) // 64)
+                if factor > 1:
+                    img = img.subsample(factor, factor)
+                self.iconphoto(True, img)
+                self._ico_ref = img
+                return
+            except Exception:
+                pass
+        # Fallback: ζυγαριά με pixels αν δεν βρεθεί το logo.png
         ico = tk.PhotoImage(width=64, height=64)
-        ico.put("#0056b3", to=(0, 0, 64, 64))          # μπλε φόντο
-        # Ζυγαριά ⚖
-        ico.put("#ffffff", to=(30, 10, 34, 48))         # κεντρικό στύλο
-        ico.put("#ffffff", to=(14, 18, 50, 21))         # οριζόντιος βραχίονας
-        ico.put("#ffffff", to=(14, 18, 22, 22))         # αριστερό άκρο
-        ico.put("#ffffff", to=(42, 18, 50, 22))         # δεξί άκρο
-        ico.put("#ffffff", to=(10, 21, 26, 32))         # αριστερό πιάτο
-        ico.put("#ffffff", to=(38, 21, 54, 32))         # δεξί πιάτο
-        ico.put("#ffffff", to=(22, 48, 42, 52))         # βάση
+        ico.put("#0077c8", to=(0, 0, 64, 64))
+        ico.put("#ffffff", to=(30, 10, 34, 48))
+        ico.put("#ffffff", to=(14, 18, 50, 21))
+        ico.put("#ffffff", to=(10, 21, 26, 32))
+        ico.put("#ffffff", to=(38, 21, 54, 32))
+        ico.put("#ffffff", to=(22, 48, 42, 52))
         self.iconphoto(True, ico)
-        self._ico_ref = ico                             # αποφυγή garbage collection
+        self._ico_ref = ico
 
     # ── UI ───────────────────────────────────────────────────────────────
     def _build_ui(self):
         pad = dict(padx=12, pady=6)
 
-        # Header με χρώμα
-        hdr = tk.Frame(self, bg="#0056b3")
+        # Header με logo
+        hdr = tk.Frame(self, bg="#ffffff", pady=8)
         hdr.pack(fill="x")
+
+        logo_file = resource_path("logo.png")
+        if logo_file.exists():
+            try:
+                raw = tk.PhotoImage(file=str(logo_file))
+                # Κλιμάκωση ώστε το ύψος να είναι ~50px
+                factor = max(1, raw.height() // 50)
+                if factor > 1:
+                    raw = raw.subsample(factor, factor)
+                lbl_logo = tk.Label(hdr, image=raw, bg="#ffffff")
+                lbl_logo.image = raw          # αποφυγή GC
+                lbl_logo.pack(side="left", padx=12)
+            except Exception:
+                self._header_fallback(hdr)
+        else:
+            self._header_fallback(hdr)
+
         tk.Label(
-            hdr, text="  ⚖  ILS1100 Converter  —  CP737 → UTF-8",
-            bg="#0056b3", fg="white",
-            font=("Segoe UI", 11, "bold"), pady=10
-        ).pack(side="left")
+            hdr, text="Μετατροπή Αρχείων\nΖυγαριάς ILS1100",
+            bg="#ffffff", fg="#0077c8",
+            font=("Segoe UI", 10, "bold"), justify="left"
+        ).pack(side="left", padx=6)
+
+        ttk.Separator(self, orient="horizontal").pack(fill="x")
 
         # Φάκελος
         frm = ttk.LabelFrame(self, text="Φάκελος εξαγωγής ζυγαριάς")
         frm.pack(fill="x", **pad)
-        self._entry = ttk.Entry(frm, textvariable=self.watch_var, width=44)
-        self._entry.pack(side="left", padx=5, pady=6)
+        ttk.Entry(frm, textvariable=self.watch_var, width=44).pack(side="left", padx=5, pady=6)
         ttk.Button(frm, text="...", width=3, command=self.browse).pack(side="left", pady=6)
 
         # Κουμπιά
@@ -116,6 +153,10 @@ class App(tk.Tk):
         # Status bar
         ttk.Label(self, textvariable=self.status_var, relief="sunken", anchor="w").pack(
             fill="x", side="bottom", ipady=2)
+
+    def _header_fallback(self, parent):
+        tk.Label(parent, text="ICS", bg="#ffffff", fg="#0077c8",
+                 font=("Segoe UI", 22, "bold")).pack(side="left", padx=12)
 
     def _center(self):
         self.update_idletasks()

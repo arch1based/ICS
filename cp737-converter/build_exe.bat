@@ -8,14 +8,14 @@ echo.
 echo [1/3] Εγκατασταση εξαρτησεων...
 pip install pyinstaller pillow --quiet
 if errorlevel 1 (
-    echo ΣΦΑΛΜΑ: Αποτυχια εγκαταστασης. Ελεγξτε ότι η Python ειναι εγκατεστημένη.
+    echo ΣΦΑΛΜΑ: Αποτυχια εγκαταστασης. Ελεγξτε ότι η Python ειναι εγκατεστημενη.
     pause & exit /b 1
 )
 
 echo [2/3] Δημιουργια εικονιδιου...
 python generate_icon.py
 if errorlevel 1 (
-    echo ΠΡΟΕΙΔΟΠΟΙΗΣΗ: Το εικονιδιο δεν δημιουργηθηκε. Συνεχιζεται χωρις αυτο.
+    echo ΠΡΟΕΙΔΟΠΟΙΗΣΗ: Αποτυχια δημιουργιας εικονιδιου. Συνεχιζεται χωρις αυτο.
     set ICON_FLAG=
 ) else (
     set ICON_FLAG=--icon icon.ico
@@ -26,6 +26,7 @@ pyinstaller ^
     --onefile ^
     --noconsole ^
     --name "CP737_Converter" ^
+    --add-data "logo.png;." ^
     %ICON_FLAG% ^
     cp737_watcher_gui.py
 
