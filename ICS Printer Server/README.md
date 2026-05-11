@@ -10,7 +10,7 @@
 <table>
   <tr>
     <td align="center">
-      <a href="https://github.com/arch1based/ICS/blob/main/ICS%20Printer%20Server%20v2.0.zip?raw=true">
+      <a href="https://raw.githubusercontent.com/arch1based/ICS/main/ICS%20Printer%20Server%20v2.0.zip">
         <img src="https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"/>
         <br/><b>Λήψη για Windows</b>
       </a>
@@ -366,7 +366,7 @@
 
 | Πλατφόρμα | Σύνδεσμος | Περιγραφή |
 |---|---|---|
-| 🪟 **Windows** | [⬇ Κατέβασμα για Windows](https://github.com/arch1based/ICS/blob/main/ICS%20Printer%20Server%20v2.0.zip?raw=true) | ICS Printer Server v2.0 — Άμεση λήψη |
+| 🪟 **Windows** | [⬇ Κατέβασμα για Windows](https://raw.githubusercontent.com/arch1based/ICS/main/ICS%20Printer%20Server%20v2.0.zip) | ICS Printer Server v2.0 — Άμεση λήψη |
 | 🤖 **Android** | [⬇ Κατέβασμα για Android](https://github.com/arch1based/ICS/releases/download/v2.0/ICS-Printer-Server-v2.0.apk) | ICS Printer Server v2.0 (APK) — Άμεση λήψη |
 | 📄 **PDF** | [Τεχνική Τεκμηρίωση](./ICS_Printer_Server_Οδηγός.pdf) | Πλήρης οδηγός σε μορφή PDF |
 
