@@ -1,6 +1,6 @@
 """
-CP737 → UTF-8 Auto Converter
-Παρακολουθεί φάκελο και μετατρέπει αυτόματα αρχεία CP737 (DOS Greek) σε UTF-8.
+CP1253/CP737 → UTF-8 Auto Converter
+Παρακολουθεί φάκελο και μετατρέπει αυτόματα αρχεία ζυγαριάς (Windows/DOS Greek) σε UTF-8.
 """
 
 import sys
@@ -12,14 +12,25 @@ from datetime import datetime
 
 # ── Ρυθμίσεις ──────────────────────────────────────────────────────────────
 WATCH_FOLDER   = r"C:\ERP_Export"      # Φάκελος που εξάγει το ERP
-BACKUP_FOLDER  = r"C:\ERP_Export\backup_cp737"  # Αντίγραφο πριν τη μετατροπή
+BACKUP_FOLDER  = r"C:\ERP_Export\backup_greek"  # Αντίγραφο πριν τη μετατροπή
 FILE_EXTENSIONS = {".txt", ".csv", ".dat", ".asc"}  # Τύποι αρχείων
-SOURCE_ENCODING = "cp737"
 TARGET_ENCODING = "utf-8-sig"          # utf-8-sig = UTF-8 με BOM (ανοίγει σωστά στο Excel)
 CHECK_INTERVAL  = 3                    # Δευτερόλεπτα μεταξύ ελέγχων
 # ───────────────────────────────────────────────────────────────────────────
 
 CONVERTED_TAG = ".utf8_done"  # Κρυφό αρχείο-σήμα για αρχεία που έχουν ήδη μετατραπεί
+
+
+def decode_greek_auto(raw_bytes: bytes) -> str:
+    """Αποκωδικοποιεί αρχείο ζυγαριάς που μπορεί να αναμιγνύει CP1253 και CP737."""
+    lines = raw_bytes.split(b'\n')
+    decoded = []
+    for line in lines:
+        try:
+            decoded.append(line.decode('cp1253'))
+        except (UnicodeDecodeError, ValueError):
+            decoded.append(line.decode('cp737', errors='replace'))
+    return '\n'.join(decoded)
 
 
 def log(msg: str):
@@ -43,17 +54,17 @@ def convert_file(path: Path):
     backup_path = backup_dir / path.name
     shutil.copy2(path, backup_path)
 
-    # Διαβάζουμε με CP737
+    # Διαβάζουμε με αυτόματη ανίχνευση ελληνικής κωδικοσελίδας (CP1253/CP737)
     try:
-        text = path.read_bytes().decode(SOURCE_ENCODING)
-    except UnicodeDecodeError as e:
+        text = decode_greek_auto(path.read_bytes())
+    except Exception as e:
         log(f"  ΣΦΑΛΜΑ αποκωδικοποίησης {path.name}: {e}")
         return False
 
     # Γράφουμε ως UTF-8
     path.write_bytes(text.encode(TARGET_ENCODING))
     mark_converted(path)
-    log(f"  OK  {path.name}  ({SOURCE_ENCODING} → {TARGET_ENCODING})")
+    log(f"  OK  {path.name}  (CP1253/CP737 → {TARGET_ENCODING})")
     return True
 
 
@@ -74,7 +85,7 @@ def main():
 
     log(f"Παρακολούθηση: {WATCH_FOLDER}")
     log(f"Τύποι αρχείων: {', '.join(FILE_EXTENSIONS)}")
-    log(f"Κωδικοσελίδα: {SOURCE_ENCODING} → {TARGET_ENCODING}")
+    log(f"Κωδικοσελίδα: CP1253/CP737 → {TARGET_ENCODING}")
     log("Πατήστε Ctrl+C για τερματισμό.\n")
 
     try:
