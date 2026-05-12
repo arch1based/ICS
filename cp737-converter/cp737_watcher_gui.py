@@ -7,6 +7,8 @@ import sys
 import shutil
 import json
 import os
+import threading
+import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
@@ -16,10 +18,11 @@ if sys.platform == "win32":
     import winreg
 
 # ── Ρυθμίσεις ──────────────────────────────────────────────────────────────
-TARGET_ENCODING = "utf-8-sig"
-CONFIG_PATH     = Path(os.environ.get("APPDATA", ".")) / "ICS" / "cp737_converter.json"
-_AUTOSTART_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_AUTOSTART_NAME = "ILS1100_Converter"
+TARGET_ENCODING  = "utf-8-sig"
+CHECK_INTERVAL   = 60          # δευτερόλεπτα μεταξύ ελέγχων
+CONFIG_PATH      = Path(os.environ.get("APPDATA", ".")) / "ICS" / "cp737_converter.json"
+_AUTOSTART_KEY   = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_AUTOSTART_NAME  = "ILS1100_Converter"
 # ───────────────────────────────────────────────────────────────────────────
 
 
@@ -32,6 +35,16 @@ def decode_greek_auto(raw_bytes: bytes) -> str:
         except (UnicodeDecodeError, ValueError):
             decoded.append(line.decode('cp737', errors='replace'))
     return '\n'.join(decoded)
+
+
+def is_already_utf8(raw: bytes) -> bool:
+    if raw.startswith(b'\xef\xbb\xbf'):
+        return True
+    try:
+        raw.decode('utf-8')
+        return True
+    except (UnicodeDecodeError, ValueError):
+        return False
 
 
 def get_autostart() -> bool:
@@ -92,6 +105,10 @@ class App(tk.Tk):
         self.status_var    = tk.StringVar(value="Έτοιμο")
         self.autostart_var = tk.BooleanVar(value=get_autostart())
         self._last_dir     = load_config().get("last_dir", "C:\\")
+        self._watch_path   = None   # αρχείο που παρακολουθούμε
+        self._watch_mtime  = None   # τελευταία γνωστή ώρα τροποποίησης
+        self._watching     = False
+        self._thread       = None
 
         self._build_ui()
         self._set_icon()
@@ -151,13 +168,20 @@ class App(tk.Tk):
 
         ttk.Separator(self, orient="horizontal").pack(fill="x")
 
-        # Κουμπί μετατροπής
+        # Κουμπιά
         bf = ttk.Frame(self)
         bf.pack(**pad)
-        ttk.Button(
+        self.btn_pick = ttk.Button(
             bf, text="📂   Επιλογή αρχείου & Μετατροπή",
             command=self.convert_file, width=36
-        ).pack(ipady=6)
+        )
+        self.btn_pick.pack(ipady=6)
+
+        self.btn_stop = ttk.Button(
+            bf, text="■   Διακοπή παρακολούθησης",
+            command=self.stop_watch, width=36, state="disabled"
+        )
+        self.btn_stop.pack(ipady=4, pady=(4, 0))
 
         # Αυτόματη εκκίνηση
         af = ttk.Frame(self)
@@ -203,6 +227,17 @@ class App(tk.Tk):
         self.log.see("end")
         self.log.configure(state="disabled")
 
+    def _do_convert(self, path: Path) -> bool:
+        """Μετατρέπει το αρχείο. Επιστρέφει True αν έγινε μετατροπή."""
+        raw = path.read_bytes()
+        if is_already_utf8(raw):
+            return False
+        backup = path.with_suffix(".bak" + path.suffix)
+        shutil.copy2(path, backup)
+        text = decode_greek_auto(raw)
+        path.write_bytes(text.encode(TARGET_ENCODING))
+        return True
+
     def convert_file(self):
         fp = filedialog.askopenfilename(
             initialdir=self._last_dir,
@@ -214,19 +249,60 @@ class App(tk.Tk):
         )
         if not fp:
             return
+
         path = Path(fp)
         self._last_dir = str(path.parent)
         save_config({"last_dir": self._last_dir})
+
+        # Διακοπή τυχόν προηγούμενης παρακολούθησης
+        self.stop_watch()
+
         try:
-            backup = path.with_suffix(".bak" + path.suffix)
-            shutil.copy2(path, backup)
-            text = decode_greek_auto(path.read_bytes())
-            path.write_bytes(text.encode(TARGET_ENCODING))
-            self.log_line(f"✓  {path.name}")
-            self.status_var.set(f"Έτοιμο — τελευταίο: {path.name}")
+            converted = self._do_convert(path)
+            if converted:
+                self.log_line(f"✓  {path.name}")
+            else:
+                self.log_line(f"⚠  {path.name} — ήδη UTF-8")
         except Exception as e:
             messagebox.showerror("Σφάλμα", f"Αποτυχία μετατροπής:\n{e}")
             self.log_line(f"✗  {path.name}: {e}")
+            return
+
+        # Έναρξη παρακολούθησης
+        self._watch_path  = path
+        self._watch_mtime = path.stat().st_mtime
+        self._watching    = True
+        self.btn_stop.configure(state="normal")
+        self.status_var.set(f"⟳ Παρακολούθηση: {path.name}  (κάθε {CHECK_INTERVAL}s)")
+        self._thread = threading.Thread(target=self._watch_loop, daemon=True)
+        self._thread.start()
+
+    def stop_watch(self):
+        self._watching = False
+        self._watch_path = None
+        self.btn_stop.configure(state="disabled")
+        self.status_var.set("Έτοιμο")
+
+    # ── Loop παρακολούθησης (background thread) ───────────────────────
+    def _watch_loop(self):
+        while self._watching:
+            time.sleep(CHECK_INTERVAL)
+            if not self._watching:
+                break
+            path = self._watch_path
+            if not path or not path.exists():
+                break
+            try:
+                mtime = path.stat().st_mtime
+                if mtime != self._watch_mtime:
+                    converted = self._do_convert(path)
+                    self._watch_mtime = path.stat().st_mtime
+                    if converted:
+                        self.after(0, self.log_line, f"✓  {path.name}  (αλλαγή εντοπίστηκε)")
+                    else:
+                        self.after(0, self.log_line, f"⚠  {path.name}  (αλλαγή χωρίς μετατροπή — ήδη UTF-8)")
+            except Exception as e:
+                self.after(0, self.log_line, f"✗  {path.name}: {e}")
 
 
 if __name__ == "__main__":
