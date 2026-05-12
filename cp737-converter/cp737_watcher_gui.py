@@ -14,6 +14,9 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from datetime import datetime
 
+if sys.platform == "win32":
+    import winreg
+
 # ── Ρυθμίσεις ──────────────────────────────────────────────────────────────
 FILE_EXTENSIONS = {".txt", ".csv", ".dat", ".asc"}
 TARGET_ENCODING = "utf-8-sig"
@@ -33,6 +36,40 @@ def decode_greek_auto(raw_bytes: bytes) -> str:
         except (UnicodeDecodeError, ValueError):
             decoded.append(line.decode('cp737', errors='replace'))
     return '\n'.join(decoded)
+
+
+_AUTOSTART_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_AUTOSTART_NAME = "ILS1100_Converter"
+
+
+def get_autostart() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_KEY, 0, winreg.KEY_READ)
+        winreg.QueryValueEx(key, _AUTOSTART_NAME)
+        winreg.CloseKey(key)
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def set_autostart(enabled: bool):
+    if sys.platform != "win32":
+        return
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_KEY, 0, winreg.KEY_SET_VALUE)
+        if enabled:
+            exe = sys.executable
+            winreg.SetValueEx(key, _AUTOSTART_NAME, 0, winreg.REG_SZ, f'"{exe}"')
+        else:
+            try:
+                winreg.DeleteValue(key, _AUTOSTART_NAME)
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+    except OSError:
+        pass
 
 
 def resource_path(filename: str) -> Path:
@@ -63,11 +100,12 @@ class App(tk.Tk):
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", self.iconify)
 
-        self.watch_var  = tk.StringVar(value="")
-        self.status_var = tk.StringVar(value="Σταματημένο")
-        self.running    = False
-        self._thread    = None
-        self._converted = 0
+        self.watch_var     = tk.StringVar(value="")
+        self.status_var    = tk.StringVar(value="Σταματημένο")
+        self.autostart_var = tk.BooleanVar(value=get_autostart())
+        self.running       = False
+        self._thread       = None
+        self._converted    = 0
 
         self._build_ui()
         self._set_icon()
@@ -152,6 +190,14 @@ class App(tk.Tk):
         self.btn_stop = ttk.Button(bf, text="■  Διακοπή", command=self.stop, width=18, state="disabled")
         self.btn_stop.pack(side="left", padx=5)
 
+        # Αυτόματη εκκίνηση με Windows
+        af = ttk.Frame(self)
+        af.pack(fill="x", padx=12, pady=(0, 4))
+        ttk.Checkbutton(
+            af, text="Εκκίνηση αυτόματα με τα Windows",
+            variable=self.autostart_var, command=self._toggle_autostart
+        ).pack(side="left")
+
         # Log
         lf = ttk.LabelFrame(self, text="Αρχεία που μετατράπηκαν")
         lf.pack(fill="both", expand=True, **pad)
@@ -178,6 +224,9 @@ class App(tk.Tk):
         self.geometry(f"+{x}+{y}")
 
     # ── Ενέργειες ────────────────────────────────────────────────────────
+    def _toggle_autostart(self):
+        set_autostart(self.autostart_var.get())
+
     def browse(self):
         d = filedialog.askdirectory(initialdir=self.watch_var.get() or "C:\\")
         if d:
@@ -221,7 +270,7 @@ class App(tk.Tk):
 
     # ── Loop παρακολούθησης (background thread) ───────────────────────
     def _watch_loop(self, watch_dir: Path):
-        backup_dir = watch_dir / "backup_cp737"
+        backup_dir = watch_dir / "backup_greek"
         backup_dir.mkdir(exist_ok=True)
 
         while self.running:
