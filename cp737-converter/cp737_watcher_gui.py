@@ -14,15 +14,10 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from datetime import datetime
 
-try:
-    import pystray
-    from PIL import Image, ImageDraw
-    _TRAY_OK = True
-except ImportError:
-    _TRAY_OK = False
-
 if sys.platform == "win32":
     import winreg
+    import ctypes
+    import ctypes.wintypes as _w
 
 # ── Ρυθμίσεις ──────────────────────────────────────────────────────────────
 TARGET_ENCODING  = "utf-8-sig"
@@ -103,22 +98,163 @@ def resource_path(filename: str) -> Path:
     return Path(__file__).parent / filename
 
 
-def _make_tray_image() -> "Image.Image":
-    """Δημιουργεί το εικονίδιο του tray (μπλε τετράγωνο με λευκό 'I')."""
-    logo_file = resource_path("logo.png")
-    if logo_file.exists():
-        try:
-            return Image.open(str(logo_file)).convert("RGBA").resize((64, 64))
-        except Exception:
-            pass
-    img = Image.new("RGB", (64, 64), "#0077c8")
-    d = ImageDraw.Draw(img)
-    d.rectangle([30, 10, 34, 54], fill="#ffffff")
-    d.rectangle([14, 10, 50, 18], fill="#ffffff")
-    d.rectangle([14, 46, 50, 54], fill="#ffffff")
-    return img
+# ── System Tray (pure ctypes — χωρίς εγκατάσταση) ────────────────────────
+if sys.platform == "win32":
+    class _NOTIFYICONDATA(ctypes.Structure):
+        _fields_ = [
+            ("cbSize",           _w.DWORD),
+            ("hWnd",             _w.HWND),
+            ("uID",              _w.UINT),
+            ("uFlags",           _w.UINT),
+            ("uCallbackMessage", _w.UINT),
+            ("hIcon",            _w.HICON),
+            ("szTip",            _w.WCHAR * 128),
+        ]
+
+    _WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_long, _w.HWND, _w.UINT, _w.WPARAM, _w.LPARAM)
+
+    class _WNDCLASSEX(ctypes.Structure):
+        _fields_ = [
+            ("cbSize",        _w.UINT),
+            ("style",         _w.UINT),
+            ("lpfnWndProc",   _WNDPROC),
+            ("cbClsExtra",    ctypes.c_int),
+            ("cbWndExtra",    ctypes.c_int),
+            ("hInstance",     _w.HINSTANCE),
+            ("hIcon",         _w.HICON),
+            ("hCursor",       _w.HANDLE),
+            ("hbrBackground", _w.HBRUSH),
+            ("lpszMenuName",  _w.LPCWSTR),
+            ("lpszClassName", _w.LPCWSTR),
+            ("hIconSm",       _w.HICON),
+        ]
+
+    class WinTray:
+        _WM_TRAYICON     = 0x8001
+        _WM_CLOSE        = 0x0010
+        _WM_DESTROY      = 0x0002
+        _WM_RBUTTONUP    = 0x0205
+        _WM_LBUTTONDBLCLK = 0x0203
+        _NIM_ADD         = 0
+        _NIM_DELETE      = 2
+        _NIF_MESSAGE     = 1
+        _NIF_ICON        = 2
+        _NIF_TIP         = 4
+        _MF_STRING       = 0
+        _MF_SEPARATOR    = 0x0800
+        _TPM_RETURNCMD   = 0x0100
+        _TPM_RIGHTALIGN  = 0x0008
+        _TPM_BOTTOMALIGN = 0x0020
+        _MENU_OPEN       = 1001
+        _MENU_QUIT       = 1002
+
+        def __init__(self, tooltip: str, on_open, on_quit):
+            self._tooltip = tooltip
+            self._on_open = on_open
+            self._on_quit = on_quit
+            self._hwnd    = None
+            self._hicon   = None
+            self._alive   = True
+            self._thread  = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+
+        def _run(self):
+            user32   = ctypes.windll.user32
+            shell32  = ctypes.windll.shell32
+            kernel32 = ctypes.windll.kernel32
+
+            hinstance  = kernel32.GetModuleHandleW(None)
+            class_name = "ILS1100TrayWnd"
+
+            def wnd_proc(hwnd, msg, wp, lp):
+                if msg == self._WM_TRAYICON:
+                    if lp == self._WM_RBUTTONUP:
+                        self._show_menu(hwnd)
+                    elif lp == self._WM_LBUTTONDBLCLK:
+                        self._on_open()
+                elif msg == self._WM_CLOSE:
+                    self._remove_icon(hwnd)
+                    user32.DestroyWindow(hwnd)
+                elif msg == self._WM_DESTROY:
+                    user32.PostQuitMessage(0)
+                return user32.DefWindowProcW(hwnd, msg, wp, lp)
+
+            self._proc_ref = _WNDPROC(wnd_proc)
+
+            wc = _WNDCLASSEX()
+            wc.cbSize        = ctypes.sizeof(_WNDCLASSEX)
+            wc.lpfnWndProc   = self._proc_ref
+            wc.hInstance     = hinstance
+            wc.hCursor       = user32.LoadCursorW(None, ctypes.cast(32512, _w.LPCWSTR))
+            wc.hbrBackground = 6
+            wc.lpszClassName = class_name
+            user32.RegisterClassExW(ctypes.byref(wc))
+
+            hwnd = user32.CreateWindowExW(
+                0, class_name, "ILS1100 Tray", 0,
+                0, 0, 0, 0, -3, None, hinstance, None
+            )
+            self._hwnd = hwnd
+
+            # Προσπαθεί να φορτώσει το εικονίδιο από το exe, αλλιώς default
+            hicon = shell32.ExtractIconW(hinstance, sys.executable, 0)
+            if not hicon or hicon == 1:
+                hicon = user32.LoadIconW(None, ctypes.cast(32512, _w.LPCWSTR))
+            self._hicon = hicon
+            self._add_icon(hwnd)
+
+            msg = _w.MSG()
+            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+                user32.TranslateMessage(ctypes.byref(msg))
+                user32.DispatchMessageW(ctypes.byref(msg))
+
+        def _make_nid(self, hwnd) -> _NOTIFYICONDATA:
+            nid = _NOTIFYICONDATA()
+            nid.cbSize           = ctypes.sizeof(_NOTIFYICONDATA)
+            nid.hWnd             = hwnd
+            nid.uID              = 1
+            nid.uFlags           = self._NIF_MESSAGE | self._NIF_ICON | self._NIF_TIP
+            nid.uCallbackMessage = self._WM_TRAYICON
+            nid.hIcon            = self._hicon or 0
+            nid.szTip            = self._tooltip[:127]
+            return nid
+
+        def _add_icon(self, hwnd):
+            nid = self._make_nid(hwnd)
+            ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_ADD, ctypes.byref(nid))
+
+        def _remove_icon(self, hwnd):
+            nid = self._make_nid(hwnd)
+            ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_DELETE, ctypes.byref(nid))
+
+        def _show_menu(self, hwnd):
+            user32 = ctypes.windll.user32
+            hmenu  = user32.CreatePopupMenu()
+            user32.AppendMenuW(hmenu, self._MF_STRING,    self._MENU_OPEN, "Άνοιγμα")
+            user32.AppendMenuW(hmenu, self._MF_SEPARATOR, 0, None)
+            user32.AppendMenuW(hmenu, self._MF_STRING,    self._MENU_QUIT, "Έξοδος")
+
+            pt = _w.POINT()
+            user32.GetCursorPos(ctypes.byref(pt))
+            user32.SetForegroundWindow(hwnd)
+            cmd = user32.TrackPopupMenu(
+                hmenu,
+                self._TPM_RETURNCMD | self._TPM_RIGHTALIGN | self._TPM_BOTTOMALIGN,
+                pt.x, pt.y, 0, hwnd, None
+            )
+            user32.DestroyMenu(hmenu)
+
+            if cmd == self._MENU_OPEN:
+                self._on_open()
+            elif cmd == self._MENU_QUIT:
+                self._on_quit()
+
+        def stop(self):
+            if self._hwnd:
+                ctypes.windll.user32.PostMessageW(self._hwnd, self._WM_CLOSE, 0, 0)
 
 
+# ── Εφαρμογή ─────────────────────────────────────────────────────────────
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -133,12 +269,17 @@ class App(tk.Tk):
         self._watching     = False
         self._thread       = None
         self._tray         = None
-        self._tray_thread  = None
 
         self._build_ui()
         self._set_icon()
         self._center()
-        self._setup_tray()
+
+        if sys.platform == "win32":
+            self._tray = WinTray(
+                "ILS1100 Converter",
+                on_open=lambda: self.after(0, self._show_window),
+                on_quit=lambda: self.after(0, self._quit_app),
+            )
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -166,44 +307,21 @@ class App(tk.Tk):
         self.iconphoto(True, ico)
         self._ico_ref = ico
 
-    # ── System Tray ───────────────────────────────────────────────────────
-    def _setup_tray(self):
-        if not _TRAY_OK:
-            return
-        menu = pystray.Menu(
-            pystray.MenuItem("Άνοιγμα", self._tray_show, default=True),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Έξοδος", self._tray_quit),
-        )
-        self._tray = pystray.Icon(
-            "ILS1100_Converter",
-            _make_tray_image(),
-            "ILS1100 Converter",
-            menu,
-        )
-        self._tray_thread = threading.Thread(target=self._tray.run, daemon=True)
-        self._tray_thread.start()
-
-    def _tray_show(self, icon=None, item=None):
-        self.after(0, self._show_window)
-
-    def _tray_quit(self, icon=None, item=None):
-        self.after(0, self._quit_app)
-
+    # ── Tray ─────────────────────────────────────────────────────────────
     def _show_window(self):
         self.deiconify()
         self.lift()
         self.focus_force()
 
     def _on_close(self):
-        if _TRAY_OK and self._tray:
-            self.withdraw()   # κρύψε το παράθυρο, μείνε στο tray
+        if self._tray:
+            self.withdraw()        # κρύψε παράθυρο, μείνε στο tray
         else:
             self._quit_app()
 
     def _quit_app(self):
         self._watching = False
-        if _TRAY_OK and self._tray:
+        if self._tray:
             try:
                 self._tray.stop()
             except Exception:
@@ -214,7 +332,6 @@ class App(tk.Tk):
     def _build_ui(self):
         pad = dict(padx=12, pady=6)
 
-        # Header
         hdr = tk.Frame(self, bg="#ffffff", pady=8)
         hdr.pack(fill="x")
         logo_file = resource_path("logo.png")
@@ -240,7 +357,6 @@ class App(tk.Tk):
 
         ttk.Separator(self, orient="horizontal").pack(fill="x")
 
-        # Κουμπιά
         bf = ttk.Frame(self)
         bf.pack(**pad)
         self.btn_pick = ttk.Button(
@@ -255,7 +371,6 @@ class App(tk.Tk):
         )
         self.btn_stop.pack(ipady=4, pady=(4, 0))
 
-        # Αυτόματη εκκίνηση
         af = ttk.Frame(self)
         af.pack(fill="x", padx=12, pady=(0, 4))
         ttk.Checkbutton(
@@ -263,14 +378,12 @@ class App(tk.Tk):
             variable=self.autostart_var, command=self._toggle_autostart
         ).pack(side="left")
 
-        # Υπόδειξη tray
-        if _TRAY_OK:
+        if sys.platform == "win32":
             tk.Label(
                 af, text="  (το X το στέλνει στο tray)",
                 fg="#888888", font=("Segoe UI", 8)
             ).pack(side="left")
 
-        # Log
         lf = ttk.LabelFrame(self, text="Ιστορικό μετατροπών")
         lf.pack(fill="both", expand=True, **pad)
         self.log = tk.Text(lf, height=10, width=56, state="disabled", font=("Consolas", 9))
@@ -279,7 +392,6 @@ class App(tk.Tk):
         self.log.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
-        # Status bar
         ttk.Label(self, textvariable=self.status_var, relief="sunken", anchor="w").pack(
             fill="x", side="bottom", ipady=2)
 
