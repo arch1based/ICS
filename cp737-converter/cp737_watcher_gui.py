@@ -98,8 +98,9 @@ def resource_path(filename: str) -> Path:
     return Path(__file__).parent / filename
 
 
-# ── System Tray (pure ctypes — χωρίς εγκατάσταση) ────────────────────────
+# ── System Tray — subclass του tkinter HWND (χωρίς thread, χωρίς εγκατάσταση)
 if sys.platform == "win32":
+
     class _NOTIFYICONDATA(ctypes.Structure):
         _fields_ = [
             ("cbSize",           _w.DWORD),
@@ -111,123 +112,91 @@ if sys.platform == "win32":
             ("szTip",            _w.WCHAR * 128),
         ]
 
-    _WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_long, _w.HWND, _w.UINT, _w.WPARAM, _w.LPARAM)
-
-    class _WNDCLASSEX(ctypes.Structure):
-        _fields_ = [
-            ("cbSize",        _w.UINT),
-            ("style",         _w.UINT),
-            ("lpfnWndProc",   _WNDPROC),
-            ("cbClsExtra",    ctypes.c_int),
-            ("cbWndExtra",    ctypes.c_int),
-            ("hInstance",     _w.HINSTANCE),
-            ("hIcon",         _w.HICON),
-            ("hCursor",       _w.HANDLE),
-            ("hbrBackground", _w.HBRUSH),
-            ("lpszMenuName",  _w.LPCWSTR),
-            ("lpszClassName", _w.LPCWSTR),
-            ("hIconSm",       _w.HICON),
-        ]
+    _WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, _w.HWND, _w.UINT, _w.WPARAM, _w.LPARAM)
 
     class WinTray:
-        _WM_TRAYICON     = 0x8001
-        _WM_CLOSE        = 0x0010
-        _WM_DESTROY      = 0x0002
-        _WM_RBUTTONUP    = 0x0205
+        """
+        Προσθέτει system-tray icon χρησιμοποιώντας απευθείας το HWND
+        του tkinter παραθύρου — χωρίς ξεχωριστό thread και χωρίς εξαρτήσεις.
+        """
+        _WM_TRAYICON      = 0x8001
+        _WM_RBUTTONUP     = 0x0205
         _WM_LBUTTONDBLCLK = 0x0203
-        _NIM_ADD         = 0
-        _NIM_DELETE      = 2
-        _NIF_MESSAGE     = 1
-        _NIF_ICON        = 2
-        _NIF_TIP         = 4
-        _MF_STRING       = 0
-        _MF_SEPARATOR    = 0x0800
-        _TPM_RETURNCMD   = 0x0100
-        _TPM_RIGHTALIGN  = 0x0008
-        _TPM_BOTTOMALIGN = 0x0020
-        _MENU_OPEN       = 1001
-        _MENU_QUIT       = 1002
+        _NIM_ADD          = 0
+        _NIM_DELETE       = 2
+        _NIF_MESSAGE      = 1
+        _NIF_ICON         = 2
+        _NIF_TIP          = 4
+        _MF_STRING        = 0
+        _MF_SEPARATOR     = 0x0800
+        _TPM_RETURNCMD    = 0x0100
+        _TPM_RIGHTALIGN   = 0x0008
+        _TPM_BOTTOMALIGN  = 0x0020
+        _MENU_OPEN        = 1001
+        _MENU_QUIT        = 1002
+        _GWL_WNDPROC      = -4
 
-        def __init__(self, tooltip: str, on_open, on_quit):
+        def __init__(self, hwnd: int, tooltip: str, on_open, on_quit):
+            self._hwnd    = hwnd
             self._tooltip = tooltip
             self._on_open = on_open
             self._on_quit = on_quit
-            self._hwnd    = None
-            self._hicon   = None
-            self._alive   = True
-            self._thread  = threading.Thread(target=self._run, daemon=True)
-            self._thread.start()
 
-        def _run(self):
             user32   = ctypes.windll.user32
             shell32  = ctypes.windll.shell32
             kernel32 = ctypes.windll.kernel32
 
-            hinstance  = kernel32.GetModuleHandleW(None)
-            class_name = "ILS1100TrayWnd"
-
-            def wnd_proc(hwnd, msg, wp, lp):
-                if msg == self._WM_TRAYICON:
-                    if lp == self._WM_RBUTTONUP:
-                        self._show_menu(hwnd)
-                    elif lp == self._WM_LBUTTONDBLCLK:
-                        self._on_open()
-                elif msg == self._WM_CLOSE:
-                    self._remove_icon(hwnd)
-                    user32.DestroyWindow(hwnd)
-                elif msg == self._WM_DESTROY:
-                    user32.PostQuitMessage(0)
-                return user32.DefWindowProcW(hwnd, msg, wp, lp)
-
-            self._proc_ref = _WNDPROC(wnd_proc)
-
-            wc = _WNDCLASSEX()
-            wc.cbSize        = ctypes.sizeof(_WNDCLASSEX)
-            wc.lpfnWndProc   = self._proc_ref
-            wc.hInstance     = hinstance
-            wc.hCursor       = user32.LoadCursorW(None, ctypes.cast(32512, _w.LPCWSTR))
-            wc.hbrBackground = 6
-            wc.lpszClassName = class_name
-            user32.RegisterClassExW(ctypes.byref(wc))
-
-            hwnd = user32.CreateWindowExW(
-                0, class_name, "ILS1100 Tray", 0,
-                0, 0, 0, 0, -3, None, hinstance, None
-            )
-            self._hwnd = hwnd
-
-            # Προσπαθεί να φορτώσει το εικονίδιο από το exe, αλλιώς default
+            # Φόρτωση εικονιδίου από το exe ή default
+            hinstance = kernel32.GetModuleHandleW(None)
             hicon = shell32.ExtractIconW(hinstance, sys.executable, 0)
             if not hicon or hicon == 1:
                 hicon = user32.LoadIconW(None, ctypes.cast(32512, _w.LPCWSTR))
             self._hicon = hicon
-            self._add_icon(hwnd)
 
-            msg = _w.MSG()
-            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
-                user32.TranslateMessage(ctypes.byref(msg))
-                user32.DispatchMessageW(ctypes.byref(msg))
+            # Subclass: αντικαθιστούμε το WndProc του tkinter παραθύρου
+            def _wnd_proc(hwnd, msg, wp, lp):
+                if msg == self._WM_TRAYICON:
+                    if lp == self._WM_RBUTTONUP:
+                        self._show_menu()
+                    elif lp == self._WM_LBUTTONDBLCLK:
+                        self._on_open()
+                    return 0
+                return user32.CallWindowProcW(
+                    self._old_proc, hwnd, msg, wp, lp
+                )
 
-        def _make_nid(self, hwnd) -> _NOTIFYICONDATA:
+            self._new_proc = _WNDPROC(_wnd_proc)
+
+            user32.SetWindowLongPtrW.restype  = ctypes.c_ssize_t
+            user32.SetWindowLongPtrW.argtypes = [_w.HWND, ctypes.c_int, ctypes.c_ssize_t]
+            self._old_proc = user32.SetWindowLongPtrW(
+                hwnd, self._GWL_WNDPROC,
+                ctypes.cast(self._new_proc, ctypes.c_void_p).value
+            )
+
+            user32.CallWindowProcW.restype  = ctypes.c_ssize_t
+            user32.CallWindowProcW.argtypes = [
+                ctypes.c_ssize_t, _w.HWND, _w.UINT, _w.WPARAM, _w.LPARAM
+            ]
+
+            # Προσθήκη εικονιδίου στο tray
+            self._notify(self._NIM_ADD)
+
+        def _make_nid(self) -> _NOTIFYICONDATA:
             nid = _NOTIFYICONDATA()
             nid.cbSize           = ctypes.sizeof(_NOTIFYICONDATA)
-            nid.hWnd             = hwnd
+            nid.hWnd             = self._hwnd
             nid.uID              = 1
             nid.uFlags           = self._NIF_MESSAGE | self._NIF_ICON | self._NIF_TIP
             nid.uCallbackMessage = self._WM_TRAYICON
-            nid.hIcon            = self._hicon or 0
+            nid.hIcon            = self._hicon
             nid.szTip            = self._tooltip[:127]
             return nid
 
-        def _add_icon(self, hwnd):
-            nid = self._make_nid(hwnd)
-            ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_ADD, ctypes.byref(nid))
+        def _notify(self, action: int):
+            ctypes.windll.shell32.Shell_NotifyIconW(action, ctypes.byref(self._make_nid()))
 
-        def _remove_icon(self, hwnd):
-            nid = self._make_nid(hwnd)
-            ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_DELETE, ctypes.byref(nid))
-
-        def _show_menu(self, hwnd):
+        def _show_menu(self):
             user32 = ctypes.windll.user32
             hmenu  = user32.CreatePopupMenu()
             user32.AppendMenuW(hmenu, self._MF_STRING,    self._MENU_OPEN, "Άνοιγμα")
@@ -236,11 +205,11 @@ if sys.platform == "win32":
 
             pt = _w.POINT()
             user32.GetCursorPos(ctypes.byref(pt))
-            user32.SetForegroundWindow(hwnd)
+            user32.SetForegroundWindow(self._hwnd)
             cmd = user32.TrackPopupMenu(
                 hmenu,
                 self._TPM_RETURNCMD | self._TPM_RIGHTALIGN | self._TPM_BOTTOMALIGN,
-                pt.x, pt.y, 0, hwnd, None
+                pt.x, pt.y, 0, self._hwnd, None
             )
             user32.DestroyMenu(hmenu)
 
@@ -250,8 +219,12 @@ if sys.platform == "win32":
                 self._on_quit()
 
         def stop(self):
-            if self._hwnd:
-                ctypes.windll.user32.PostMessageW(self._hwnd, self._WM_CLOSE, 0, 0)
+            self._notify(self._NIM_DELETE)
+            # Επαναφορά αρχικού WndProc
+            user32 = ctypes.windll.user32
+            user32.SetWindowLongPtrW.restype  = ctypes.c_ssize_t
+            user32.SetWindowLongPtrW.argtypes = [_w.HWND, ctypes.c_int, ctypes.c_ssize_t]
+            user32.SetWindowLongPtrW(self._hwnd, self._GWL_WNDPROC, self._old_proc)
 
 
 # ── Εφαρμογή ─────────────────────────────────────────────────────────────
@@ -274,14 +247,22 @@ class App(tk.Tk):
         self._set_icon()
         self._center()
 
+        # Αρχικοποίηση tray αφού εμφανιστεί το παράθυρο
         if sys.platform == "win32":
-            self._tray = WinTray(
-                "ILS1100 Converter",
-                on_open=lambda: self.after(0, self._show_window),
-                on_quit=lambda: self.after(0, self._quit_app),
-            )
+            self.after(100, self._init_tray)
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _init_tray(self):
+        try:
+            self._tray = WinTray(
+                self.winfo_id(),
+                "ILS1100 Converter",
+                on_open=self._show_window,
+                on_quit=self._quit_app,
+            )
+        except Exception:
+            self._tray = None
 
     # ── Εικονίδιο παραθύρου ──────────────────────────────────────────────
     def _set_icon(self):
@@ -315,7 +296,7 @@ class App(tk.Tk):
 
     def _on_close(self):
         if self._tray:
-            self.withdraw()        # κρύψε παράθυρο, μείνε στο tray
+            self.withdraw()
         else:
             self._quit_app()
 
