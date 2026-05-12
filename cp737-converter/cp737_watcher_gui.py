@@ -14,12 +14,19 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from datetime import datetime
 
+try:
+    import pystray
+    from PIL import Image, ImageDraw
+    _TRAY_OK = True
+except ImportError:
+    _TRAY_OK = False
+
 if sys.platform == "win32":
     import winreg
 
 # ── Ρυθμίσεις ──────────────────────────────────────────────────────────────
 TARGET_ENCODING  = "utf-8-sig"
-CHECK_INTERVAL   = 60          # δευτερόλεπτα μεταξύ ελέγχων
+CHECK_INTERVAL   = 2           # δευτερόλεπτα μεταξύ ελέγχων
 CONFIG_PATH      = Path(os.environ.get("APPDATA", ".")) / "ICS" / "cp737_converter.json"
 _AUTOSTART_KEY   = r"Software\Microsoft\Windows\CurrentVersion\Run"
 _AUTOSTART_NAME  = "ILS1100_Converter"
@@ -96,6 +103,22 @@ def resource_path(filename: str) -> Path:
     return Path(__file__).parent / filename
 
 
+def _make_tray_image() -> "Image.Image":
+    """Δημιουργεί το εικονίδιο του tray (μπλε τετράγωνο με λευκό 'I')."""
+    logo_file = resource_path("logo.png")
+    if logo_file.exists():
+        try:
+            return Image.open(str(logo_file)).convert("RGBA").resize((64, 64))
+        except Exception:
+            pass
+    img = Image.new("RGB", (64, 64), "#0077c8")
+    d = ImageDraw.Draw(img)
+    d.rectangle([30, 10, 34, 54], fill="#ffffff")
+    d.rectangle([14, 10, 50, 18], fill="#ffffff")
+    d.rectangle([14, 46, 50, 54], fill="#ffffff")
+    return img
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -105,16 +128,21 @@ class App(tk.Tk):
         self.status_var    = tk.StringVar(value="Έτοιμο")
         self.autostart_var = tk.BooleanVar(value=get_autostart())
         self._last_dir     = load_config().get("last_dir", "C:\\")
-        self._watch_path   = None   # αρχείο που παρακολουθούμε
-        self._watch_mtime  = None   # τελευταία γνωστή ώρα τροποποίησης
+        self._watch_path   = None
+        self._watch_mtime  = None
         self._watching     = False
         self._thread       = None
+        self._tray         = None
+        self._tray_thread  = None
 
         self._build_ui()
         self._set_icon()
         self._center()
+        self._setup_tray()
 
-    # ── Εικονίδιο ────────────────────────────────────────────────────────
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ── Εικονίδιο παραθύρου ──────────────────────────────────────────────
     def _set_icon(self):
         logo_file = resource_path("logo.png")
         if logo_file.exists():
@@ -137,6 +165,50 @@ class App(tk.Tk):
         ico.put("#ffffff", to=(22, 48, 42, 52))
         self.iconphoto(True, ico)
         self._ico_ref = ico
+
+    # ── System Tray ───────────────────────────────────────────────────────
+    def _setup_tray(self):
+        if not _TRAY_OK:
+            return
+        menu = pystray.Menu(
+            pystray.MenuItem("Άνοιγμα", self._tray_show, default=True),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Έξοδος", self._tray_quit),
+        )
+        self._tray = pystray.Icon(
+            "ILS1100_Converter",
+            _make_tray_image(),
+            "ILS1100 Converter",
+            menu,
+        )
+        self._tray_thread = threading.Thread(target=self._tray.run, daemon=True)
+        self._tray_thread.start()
+
+    def _tray_show(self, icon=None, item=None):
+        self.after(0, self._show_window)
+
+    def _tray_quit(self, icon=None, item=None):
+        self.after(0, self._quit_app)
+
+    def _show_window(self):
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def _on_close(self):
+        if _TRAY_OK and self._tray:
+            self.withdraw()   # κρύψε το παράθυρο, μείνε στο tray
+        else:
+            self._quit_app()
+
+    def _quit_app(self):
+        self._watching = False
+        if _TRAY_OK and self._tray:
+            try:
+                self._tray.stop()
+            except Exception:
+                pass
+        self.destroy()
 
     # ── UI ───────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -191,6 +263,13 @@ class App(tk.Tk):
             variable=self.autostart_var, command=self._toggle_autostart
         ).pack(side="left")
 
+        # Υπόδειξη tray
+        if _TRAY_OK:
+            tk.Label(
+                af, text="  (το X το στέλνει στο tray)",
+                fg="#888888", font=("Segoe UI", 8)
+            ).pack(side="left")
+
         # Log
         lf = ttk.LabelFrame(self, text="Ιστορικό μετατροπών")
         lf.pack(fill="both", expand=True, **pad)
@@ -228,7 +307,6 @@ class App(tk.Tk):
         self.log.configure(state="disabled")
 
     def _do_convert(self, path: Path) -> bool:
-        """Μετατρέπει το αρχείο. Επιστρέφει True αν έγινε μετατροπή."""
         raw = path.read_bytes()
         if is_already_utf8(raw):
             return False
@@ -254,7 +332,6 @@ class App(tk.Tk):
         self._last_dir = str(path.parent)
         save_config({"last_dir": self._last_dir})
 
-        # Διακοπή τυχόν προηγούμενης παρακολούθησης
         self.stop_watch()
 
         try:
@@ -268,7 +345,6 @@ class App(tk.Tk):
             self.log_line(f"✗  {path.name}: {e}")
             return
 
-        # Έναρξη παρακολούθησης
         self._watch_path  = path
         self._watch_mtime = path.stat().st_mtime
         self._watching    = True
