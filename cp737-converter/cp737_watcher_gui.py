@@ -218,15 +218,34 @@ class App(tk.Tk):
         self._last_dir = str(path.parent)
         save_config({"last_dir": self._last_dir})
         try:
+            raw = path.read_bytes()
+
+            # Αν το αρχείο είναι ήδη UTF-8, δεν χρειάζεται μετατροπή
+            if raw.startswith(b'\xef\xbb\xbf') or self._is_utf8(raw):
+                messagebox.showinfo(
+                    "Ήδη μετατραπμένο",
+                    f"Το αρχείο «{path.name}» είναι ήδη σε UTF-8 μορφή.\nΔεν χρειάζεται μετατροπή."
+                )
+                self.log_line(f"⚠  {path.name} — ήδη UTF-8, παρελείφθη")
+                return
+
             backup = path.with_suffix(".bak" + path.suffix)
             shutil.copy2(path, backup)
-            text = decode_greek_auto(path.read_bytes())
+            text = decode_greek_auto(raw)
             path.write_bytes(text.encode(TARGET_ENCODING))
             self.log_line(f"✓  {path.name}")
             self.status_var.set(f"Έτοιμο — τελευταίο: {path.name}")
         except Exception as e:
             messagebox.showerror("Σφάλμα", f"Αποτυχία μετατροπής:\n{e}")
             self.log_line(f"✗  {path.name}: {e}")
+
+    @staticmethod
+    def _is_utf8(raw: bytes) -> bool:
+        try:
+            raw.decode('utf-8')
+            return True
+        except (UnicodeDecodeError, ValueError):
+            return False
 
 
 if __name__ == "__main__":
