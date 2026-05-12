@@ -1,6 +1,6 @@
 """
-CP737 → UTF-8 Auto Converter  (GUI - Standalone EXE)
-Ζυγαριά ILS1100 — αυτόματη μετατροπή αρχείων DOS Greek σε UTF-8.
+CP1253 → UTF-8 Auto Converter  (GUI - Standalone EXE)
+Ζυγαριά ILS1100 — αυτόματη μετατροπή αρχείων Windows Greek σε UTF-8.
 """
 
 import sys
@@ -16,12 +16,23 @@ from datetime import datetime
 
 # ── Ρυθμίσεις ──────────────────────────────────────────────────────────────
 FILE_EXTENSIONS = {".txt", ".csv", ".dat", ".asc"}
-SOURCE_ENCODING = "cp737"
 TARGET_ENCODING = "utf-8-sig"
 CHECK_INTERVAL  = 3
 CONVERTED_TAG   = ".utf8_done"
 CONFIG_PATH     = Path(os.environ.get("APPDATA", ".")) / "ICS" / "cp737_converter.json"
 # ───────────────────────────────────────────────────────────────────────────
+
+
+def decode_greek_auto(raw_bytes: bytes) -> str:
+    """Αποκωδικοποιεί αρχείο ζυγαριάς που μπορεί να αναμιγνύει CP1253 και CP737."""
+    lines = raw_bytes.split(b'\n')
+    decoded = []
+    for line in lines:
+        try:
+            decoded.append(line.decode('cp1253'))
+        except (UnicodeDecodeError, ValueError):
+            decoded.append(line.decode('cp737', errors='replace'))
+    return '\n'.join(decoded)
 
 
 def resource_path(filename: str) -> Path:
@@ -223,7 +234,7 @@ class App(tk.Tk):
                         continue
                     try:
                         shutil.copy2(fp, backup_dir / fp.name)
-                        text = fp.read_bytes().decode(SOURCE_ENCODING)
+                        text = decode_greek_auto(fp.read_bytes())
                         fp.write_bytes(text.encode(TARGET_ENCODING))
                         tag.touch()
                         self._converted += 1

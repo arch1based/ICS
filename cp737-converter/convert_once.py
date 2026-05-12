@@ -1,5 +1,5 @@
 """
-Εφάπαξ μετατροπή: μετατρέπει ένα συγκεκριμένο αρχείο από CP737 σε UTF-8.
+Εφάπαξ μετατροπή: μετατρέπει ένα συγκεκριμένο αρχείο από CP1253/CP737 σε UTF-8.
 Χρήση:  python convert_once.py "C:\path\to\file.txt"
 """
 
@@ -9,8 +9,19 @@ from pathlib import Path
 from datetime import datetime
 
 
-SOURCE_ENCODING = "cp737"
 TARGET_ENCODING = "utf-8-sig"
+
+
+def decode_greek_auto(raw_bytes: bytes) -> str:
+    """Αποκωδικοποιεί αρχείο ζυγαριάς που μπορεί να αναμιγνύει CP1253 και CP737."""
+    lines = raw_bytes.split(b'\n')
+    decoded = []
+    for line in lines:
+        try:
+            decoded.append(line.decode('cp1253'))
+        except (UnicodeDecodeError, ValueError):
+            decoded.append(line.decode('cp737', errors='replace'))
+    return '\n'.join(decoded)
 
 
 def convert(src: Path):
@@ -18,9 +29,9 @@ def convert(src: Path):
     shutil.copy2(src, backup)
     print(f"Αντίγραφο ασφαλείας: {backup}")
 
-    text = src.read_bytes().decode(SOURCE_ENCODING)
+    text = decode_greek_auto(src.read_bytes())
     src.write_bytes(text.encode(TARGET_ENCODING))
-    print(f"Έτοιμο: {src}  ({SOURCE_ENCODING} → {TARGET_ENCODING})")
+    print(f"Έτοιμο: {src}  (CP1253/CP737 → {TARGET_ENCODING})")
 
 
 if __name__ == "__main__":
