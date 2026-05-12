@@ -190,6 +190,12 @@ class App(tk.Tk):
         self.btn_stop = ttk.Button(bf, text="■  Διακοπή", command=self.stop, width=18, state="disabled")
         self.btn_stop.pack(side="left", padx=5)
 
+        # Εφάπαξ μετατροπή αρχείου
+        sf = ttk.LabelFrame(self, text="Εφάπαξ μετατροπή αρχείου")
+        sf.pack(fill="x", **pad)
+        ttk.Button(sf, text="📂  Επιλογή αρχείου & Μετατροπή",
+                   command=self.convert_single_file).pack(padx=5, pady=6)
+
         # Αυτόματη εκκίνηση με Windows
         af = ttk.Frame(self)
         af.pack(fill="x", padx=12, pady=(0, 4))
@@ -226,6 +232,27 @@ class App(tk.Tk):
     # ── Ενέργειες ────────────────────────────────────────────────────────
     def _toggle_autostart(self):
         set_autostart(self.autostart_var.get())
+
+    def convert_single_file(self):
+        fp = filedialog.askopenfilename(
+            title="Επιλογή αρχείου για μετατροπή",
+            filetypes=[
+                ("Αρχεία ζυγαριάς", "*.txt *.csv *.dat *.asc"),
+                ("Όλα τα αρχεία", "*.*"),
+            ]
+        )
+        if not fp:
+            return
+        path = Path(fp)
+        try:
+            backup = path.with_suffix(".bak" + path.suffix)
+            shutil.copy2(path, backup)
+            text = decode_greek_auto(path.read_bytes())
+            path.write_bytes(text.encode(TARGET_ENCODING))
+            self.log_line(f"OK  {path.name}  (αντίγραφο: {backup.name})")
+            self.status_var.set(f"Μετατράπηκε: {path.name}")
+        except Exception as e:
+            messagebox.showerror("Σφάλμα", f"Αποτυχία μετατροπής:\n{e}")
 
     def browse(self):
         d = filedialog.askdirectory(initialdir=self.watch_var.get() or "C:\\")
