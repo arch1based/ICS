@@ -19,3 +19,4 @@
 |--------|-----------|
 | [Avery_XM100_Flash_Restore_Guide_ICS.pdf](./Avery_XM100_Flash_Restore_Guide_ICS.pdf) | Πλήρης οδηγός σε μορφή PDF |
 | [XM100_Update_Files.zip](./XM100_Update_Files.zip) | Φάκελος `xm_update` με τα .ipk αρχεία (mainapp 3.5.10.0, loadcell 1.4.1.0, printer firmware 3.6.1.0, touchscreen compensation 1.0.0.3) + update.log |
+| [XM100_Root_Kernel_Flash_Files.zip](./XM100_Root_Kernel_Flash_Files.zip) | Αρχεία για τη ΡΙΖΑ του USB stick (Βήμα 2 — Service Mode): `mtd3_xm-kernel.img` + `.sum`, `mtd4_bu-kernel.img` + `.sum`, `mtdblock5_root.tar.sum`. ⚠ Λείπει το `mtdblock5_root.tar` (root filesystem) — δεν είχε ανέβει, μόνο το checksum του |
