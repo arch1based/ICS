@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<title>ICS Signage - Ρυθμίσεις</title>
+<style>
+  body { font: 15px Segoe UI, sans-serif; background: #f3f4f6; color: #111; margin: 0; }
+  header { background: #1e3a8a; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+  header a { color: #fff; }
+  main { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
+  section { background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 18px; box-shadow: 0 1px 3px #0002; }
+  h2 { margin: 0 0 12px; font-size: 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: middle; }
+  th { font-size: 13px; color: #555; }
+  .days label { display: inline-block; margin-right: 4px; padding: 3px 7px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; user-select: none; }
+  .days input { display: none; }
+  .days label.on { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+  .yes { background: #dcfce7; color: #166534; } .no { background: #eee; color: #666; }
+  button { background: #2563eb; color: #fff; border: 0; padding: 10px 22px; border-radius: 6px; font-size: 15px; cursor: pointer; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+  .hint { color: #666; font-size: 13px; }
+  .quick button { background: #e5e7eb; color: #111; padding: 2px 8px; font-size: 12px; }
+  #saved { color: #166534; margin-left: 12px; }
+</style>
+</head>
+<body>
+<header><b>ICS Signage — Πρόγραμμα προσφορών</b><a href="/">▶ Προβολή</a></header>
+<main>
+  <section>
+    <h2>Γενικές ρυθμίσεις</h2>
+    <div class="row">
+      <label>Διάρκεια εικόνας (δευτ.): <input id="image_seconds" type="number" min="2" max="300" style="width:60px"></label>
+      <label>Εφέ αλλαγής:
+        <select id="transition">
+          <option value="random">Τυχαίο</option><option value="fade">Σβήσιμο (fade)</option>
+          <option value="slide">Σύρσιμο (slide)</option><option value="zoom">Zoom</option>
+          <option value="flip">Γύρισμα (flip)</option><option value="blur">Θόλωμα (blur)</option>
+        </select></label>
+      <label>Διάρκεια εφέ (ms): <input id="transition_ms" type="number" min="200" max="5000" step="100" style="width:70px"></label>
+      <label><input id="video_sound" type="checkbox"> Ήχος στα βίντεο</label>
+    </div>
+  </section>
+  <section>
+    <h2>Καμπάνιες</h2>
+    <p class="hint">Κάθε υποφάκελος μέσα στο <b>Προσφορές Εβδομάδας</b> ή <b>Προσφορές Ημέρας</b> είναι μία καμπάνια.
+      Παίζουν πρώτα όλες οι ενεργές της εβδομάδας και μετά (έξτρα) οι ενεργές της ημέρας.
+      Τα «Από/Έως» είναι προαιρετικά.<br>Φάκελος αρχείων: <code id="dir"></code></p>
+    <table><thead><tr><th>Ενεργή</th><th>Καμπάνια</th><th>Αρχεία</th><th>Ημέρες</th><th>Από</th><th>Έως</th><th>Σήμερα</th></tr></thead>
+      <tbody id="rows"></tbody></table>
+  </section>
+  <button onclick="save()">💾 Αποθήκευση</button><span id="saved"></span>
+</main>
+<script>
+const DAYS = ['Δε', 'Τρ', 'Τε', 'Πε', 'Πα', 'Σα', 'Κυ'];
+let data;
+async function load() {
+  data = await (await fetch('/api/config', { cache: 'no-store' })).json();
+  for (const k of ['image_seconds', 'transition', 'transition_ms']) document.getElementById(k).value = data.settings[k];
+  document.getElementById('video_sound').checked = !!data.settings.video_sound;
+  document.getElementById('dir').textContent = data.media_dir;
+  const tb = document.getElementById('rows'); tb.innerHTML = '';
+  let lastGroup = '';
+  data.campaigns.forEach((c, i) => {
+    if (c.group !== lastGroup) {
+      lastGroup = c.group;
+      tb.insertAdjacentHTML('beforeend', `<tr><td colspan="7" style="background:#eef2ff"><b>${c.group}</b></td></tr>`);
+    }
+    const days = DAYS.map((d, n) => `<label class="${c.days.includes(n) ? 'on' : ''}"><input type="checkbox" data-i="${i}" data-d="${n}" ${c.days.includes(n) ? 'checked' : ''}>${d}</label>`).join('');
+    tb.insertAdjacentHTML('beforeend', `<tr>
+      <td><input type="checkbox" id="en${i}" ${c.enabled ? 'checked' : ''}></td>
+      <td>${c.name}</td><td>${c.count}</td>
+      <td><span class="days">${days}</span>
+        <span class="quick"><button onclick="setDays(${i},[0,1,2,3,4,5,6])">Όλες</button><button onclick="setDays(${i},[])">Καμία</button></span></td>
+      <td><input type="date" id="from${i}" value="${c.from}"></td>
+      <td><input type="date" id="to${i}" value="${c.to}"></td>
+      <td><span class="badge ${c.active ? 'yes' : 'no'}">${c.active ? 'Παίζει' : 'Όχι'}</span></td></tr>`);
+  });
+  tb.querySelectorAll('.days input').forEach(cb => cb.onchange = () => cb.parentElement.classList.toggle('on', cb.checked));
+}
+function setDays(i, list) {
+  document.querySelectorAll(`.days input[data-i="${i}"]`).forEach(cb => {
+    cb.checked = list.includes(+cb.dataset.d); cb.parentElement.classList.toggle('on', cb.checked);
+  });
+}
+async function save() {
+  const campaigns = data.campaigns.map((c, i) => ({
+    key: c.key, enabled: document.getElementById('en' + i).checked,
+    days: [...document.querySelectorAll(`.days input[data-i="${i}"]:checked`)].map(cb => +cb.dataset.d),
+    from: document.getElementById('from' + i).value, to: document.getElementById('to' + i).value,
+  }));
+  const settings = {
+    image_seconds: +document.getElementById('image_seconds').value || 8,
+    transition: document.getElementById('transition').value,
+    transition_ms: +document.getElementById('transition_ms').value || 1200,
+    video_sound: document.getElementById('video_sound').checked,
+  };
+  await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings, campaigns }) });
+  document.getElementById('saved').textContent = '✔ Αποθηκεύτηκε — ισχύει από τον επόμενο κύκλο προβολής';
+  load();
+}
+load();
+</script>
+</body>
+</html>

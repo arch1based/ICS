@@ -1,0 +1,5 @@
+schedule.json
+schedule.json.tmp
+media/**/*.*
+!media/**/.keep
+__pycache__/

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<title>ICS Signage</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  .slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+           opacity: 0; will-change: transform, opacity, filter; }
+  .slide img, .slide video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #msg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+         color: #888; font: 28px Segoe UI, sans-serif; text-align: center; padding: 40px; cursor: default; }
+  #msg a { color: #6af; }
+</style>
+</head>
+<body>
+<div id="a" class="slide"></div>
+<div id="b" class="slide"></div>
+<div id="msg">Δεν υπάρχουν ενεργές προσφορές για σήμερα.<br><br>
+  Βάλε εικόνες/βίντεο στους φακέλους και ρύθμισε τις μέρες στο <a href="/admin">/admin</a></div>
+<script>
+const EFFECTS = {
+  fade:  { from: { opacity: 0 },                                   to: { opacity: 1 } },
+  slide: { from: { opacity: 1, transform: 'translateX(100%)' },    to: { opacity: 1, transform: 'translateX(0)' },
+           out:  { opacity: 1, transform: 'translateX(-100%)' } },
+  zoom:  { from: { opacity: 0, transform: 'scale(1.25)' },         to: { opacity: 1, transform: 'scale(1)' } },
+  flip:  { from: { opacity: 0, transform: 'perspective(1500px) rotateY(-90deg)' },
+           to:   { opacity: 1, transform: 'perspective(1500px) rotateY(0)' } },
+  blur:  { from: { opacity: 0, filter: 'blur(30px)' },             to: { opacity: 1, filter: 'blur(0)' } },
+};
+const NAMES = Object.keys(EFFECTS);
+const layers = [document.getElementById('a'), document.getElementById('b')];
+let cur = 0, list = [], idx = 0, cfg = {}, timer = null;
+
+async function loadPlaylist() {
+  try {
+    const r = await fetch('/api/playlist', { cache: 'no-store' });
+    cfg = await r.json();
+    list = cfg.items;
+  } catch (e) { /* κρατάμε την παλιά λίστα αν πέσει στιγμιαία ο server */ }
+}
+
+function apply(el, style) { for (const k in style) el.style[k] = style[k]; }
+
+function transitionTo(next, prev) {
+  const name = cfg.transition === 'random' || !EFFECTS[cfg.transition]
+    ? NAMES[Math.floor(Math.random() * NAMES.length)] : cfg.transition;
+  const fx = EFFECTS[name], ms = cfg.transition_ms || 1200;
+  next.style.transition = 'none';
+  next.style.filter = ''; next.style.transform = '';
+  apply(next, fx.from);
+  next.style.zIndex = 2; prev.style.zIndex = 1;
+  void next.offsetWidth;
+  const t = `opacity ${ms}ms ease, transform ${ms}ms ease, filter ${ms}ms ease`;
+  next.style.transition = t; prev.style.transition = t;
+  apply(next, fx.to);
+  if (fx.out) apply(prev, fx.out); else prev.style.opacity = 0;
+  setTimeout(() => {
+    prev.querySelectorAll('video').forEach(v => v.pause());
+    prev.innerHTML = ''; prev.style.opacity = 0;
+  }, ms + 50);
+}
+
+async function next() {
+  clearTimeout(timer);
+  if (idx >= list.length) { idx = 0; await loadPlaylist(); }  // νέος κύκλος: ξαναδιαβάζει φακέλους/πρόγραμμα
+  const msg = document.getElementById('msg');
+  if (!list.length) {
+    msg.style.display = 'flex'; layers.forEach(l => { l.innerHTML = ''; l.style.opacity = 0; });
+    timer = setTimeout(next, 30000); return;
+  }
+  msg.style.display = 'none';
+  const item = list[idx++];
+  const el = layers[1 - cur], prev = layers[cur];
+  let media;
+  if (item.type === 'video') {
+    media = document.createElement('video');
+    media.src = item.url; media.muted = !cfg.video_sound; media.playsInline = true; media.autoplay = true;
+    media.onended = next;
+    media.onerror = () => { timer = setTimeout(next, 500); };
+    // ασφάλεια: αν κολλήσει το βίντεο, προχωράμε μετά από 10 λεπτά
+    timer = setTimeout(next, 10 * 60 * 1000);
+  } else {
+    media = document.createElement('img');
+    media.src = item.url;
+    media.onerror = () => { timer = setTimeout(next, 500); };
+    timer = setTimeout(next, (cfg.image_seconds || 8) * 1000);
+  }
+  el.innerHTML = ''; el.appendChild(media);
+  if (media.play) media.play().catch(() => { media.muted = true; media.play(); });
+  cur = 1 - cur;
+  transitionTo(el, prev);
+}
+
+// Αλλαγή ημέρας ενώ παίζει: ξαναφόρτωσε τη λίστα στα μεσάνυχτα
+setInterval(() => {
+  if (cfg.date && cfg.date !== new Date().toLocaleDateString('sv')) { idx = list.length; }
+}, 60000);
+document.addEventListener('keydown', e => {
+  if (e.key === 'F2') location.href = '/admin';
+  if (e.key === 'ArrowRight') next();
+});
+
+loadPlaylist().then(next);
+</script>
+</body>
+</html>
