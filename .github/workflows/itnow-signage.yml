@@ -1,0 +1,64 @@
+name: ITNow Signage — build exe
+
+on:
+  push:
+    paths:
+      - "itnow-signage/**"
+      - ".github/workflows/itnow-signage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: itnow-signage
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install pyinstaller pillow
+
+      - name: Read version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'import server; print(server.VERSION)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build icon
+        run: python build/make_icon.py
+
+      - name: Build exe
+        run: pyinstaller --noconfirm --onefile --noconsole --name ITNow-Signage --icon icon.ico --add-data "web;web" ITNow-Signage.pyw
+
+      - name: version.json (πρότυπο για το Google Drive)
+        shell: bash
+        run: |
+          printf '{\n  "version": "%s",\n  "exe": "ΣΥΝΔΕΣΜΟΣ GOOGLE DRIVE ΤΟΥ ITNow-Signage.exe",\n  "notes": ""\n}\n' "${{ steps.ver.outputs.version }}" > dist/version.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ITNow-Signage-${{ steps.ver.outputs.version }}
+          path: |
+            itnow-signage/dist/ITNow-Signage.exe
+            itnow-signage/dist/version.json
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: itnow-signage-v${{ steps.ver.outputs.version }}
+          name: ITNow Signage v${{ steps.ver.outputs.version }}
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            ITNow Signage v${{ steps.ver.outputs.version }} — itnow.gr
+            Κατεβάστε το **ITNow-Signage.exe** και τρέξτε το: εγκαθίσταται αυτόματα στο C:\ITNow-Signage.
+          files: |
+            itnow-signage/dist/ITNow-Signage.exe
+            itnow-signage/dist/version.json

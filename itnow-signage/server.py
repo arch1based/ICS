@@ -9,13 +9,20 @@ import datetime
 import json
 import mimetypes
 import os
+import re
 import subprocess
 import sys
+import threading
 import urllib.parse
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+VERSION = "1.0.0"
 PORT = 8765
-BASE = os.path.dirname(os.path.abspath(sys.argv[0] if getattr(sys, "frozen", False) else __file__))
+FROZEN = getattr(sys, "frozen", False)  # True όταν τρέχει ως ITNow-Signage.exe
+BASE = os.path.dirname(os.path.abspath(sys.executable if FROZEN else __file__))
+WEB = os.path.join(getattr(sys, "_MEIPASS", BASE), "web")
+TECH_PIN = "1995"  # κωδικός τεχνικού για αναβαθμίσεις
 MEDIA = BASE  # οι φάκελοι προσφορών βρίσκονται δίπλα στο πρόγραμμα (C:\ITNow-Signage\...)
 CONFIG = os.path.join(BASE, "schedule.json")
 
@@ -30,6 +37,7 @@ DEFAULT_CONFIG = {
     "transition": "random",   # fade | slide | zoom | flip | blur | random
     "transition_ms": 1200,
     "video_sound": False,
+    "update_url": "",         # σύνδεσμος Google Drive προς το version.json
     "campaigns": {},          # "Ομάδα/Φάκελος": {"enabled", "days": [0..6], "from", "to"}
 }
 
@@ -173,6 +181,56 @@ def safe_folder(key):
     return None
 
 
+# ---------------- Αναβαθμίσεις (μόνο τεχνικός) ----------------
+def drive_direct(url):
+    """Μετατρέπει σύνδεσμο κοινής χρήσης Google Drive σε σύνδεσμο απευθείας λήψης."""
+    m = re.search(r"/d/([\w-]{10,})", url) or re.search(r"[?&]id=([\w-]{10,})", url)
+    if m and "google." in url:
+        return f"https://drive.usercontent.google.com/download?id={m.group(1)}&export=download&confirm=t"
+    return url
+
+
+def fetch(url, timeout=60):
+    req = urllib.request.Request(drive_direct(url), headers={"User-Agent": f"ITNow-Signage/{VERSION}"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def vtuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", str(v))[:4])
+
+
+def check_update(url):
+    info = json.loads(fetch(url, 30).decode("utf-8-sig"))
+    latest = str(info.get("version", ""))
+    return {"current": VERSION, "latest": latest, "notes": info.get("notes", ""),
+            "available": vtuple(latest) > vtuple(VERSION), "exe": info.get("exe", "")}
+
+
+def apply_update(exe_url):
+    """Κατεβάζει το νέο exe, αντικαθιστά το τρέχον και κάνει επανεκκίνηση."""
+    if not FROZEN:
+        raise RuntimeError("Η αναβάθμιση λειτουργεί μόνο στην έκδοση .exe")
+    data = fetch(exe_url, 600)
+    if len(data) < 1_000_000 or data[:2] != b"MZ":
+        raise RuntimeError("Το αρχείο που κατέβηκε δεν είναι έγκυρο .exe (ελέγξτε ότι ο σύνδεσμος είναι δημόσιος)")
+    exe = sys.executable
+    with open(exe + ".new", "wb") as f:
+        f.write(data)
+    if os.path.exists(exe + ".old"):
+        os.remove(exe + ".old")
+    os.replace(exe, exe + ".old")       # τα Windows επιτρέπουν μετονομασία του exe που τρέχει
+    os.replace(exe + ".new", exe)
+
+    def restart():
+        import time
+        time.sleep(1)
+        args = [exe, "--after-update"] + (["--autostart"] if show_running else [])
+        subprocess.Popen(args, cwd=BASE)
+        os._exit(0)
+    threading.Thread(target=restart, daemon=True).start()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -229,9 +287,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
         if path in ("/", "/player"):
-            return self.send_file(os.path.join(BASE, "web", "player.html"), "text/html; charset=utf-8")
+            return self.send_file(os.path.join(WEB, "player.html"), "text/html; charset=utf-8")
         if path == "/admin":
-            return self.send_file(os.path.join(BASE, "web", "admin.html"), "text/html; charset=utf-8")
+            return self.send_file(os.path.join(WEB, "admin.html"), "text/html; charset=utf-8")
         if path == "/api/playlist":
             today = datetime.date.today()
             cfg, info = campaigns_info(today)
@@ -244,10 +302,10 @@ class Handler(BaseHTTPRequestHandler):
                                   | {"date": today.isoformat(), "items": items})
         if path == "/api/config":
             cfg, info = campaigns_info(datetime.date.today())
-            cfg = {k: v for k, v in cfg.items() if k != "campaigns"}
+            cfg = {k: v for k, v in cfg.items() if k not in ("campaigns", "update_url")}
             return self.send_json({"settings": cfg, "campaigns": info, "media_dir": MEDIA,
                                    "groups": GROUPS, "show_running": show_running,
-                                   "today": datetime.date.today().weekday()})
+                                   "today": datetime.date.today().weekday(), "version": VERSION})
         if path.startswith("/media/"):
             full = os.path.realpath(os.path.join(MEDIA, path[len("/media/"):]))
             if not any(full.startswith(os.path.realpath(os.path.join(MEDIA, g)) + os.sep) for g in GROUPS):
@@ -275,6 +333,29 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": False}, 400)
             os.makedirs(os.path.join(MEDIA, body["group"], name), exist_ok=True)
             return self.send_json({"ok": True})
+        if path.startswith("/api/tech/"):
+            if str(body.get("pin", "")) != TECH_PIN:
+                return self.send_json({"ok": False, "error": "Λάθος κωδικός"}, 403)
+            cfg = load_config()
+            if "update_url" in body:
+                cfg["update_url"] = str(body["update_url"]).strip()
+                save_config(cfg)
+            try:
+                if path == "/api/tech/login":
+                    return self.send_json({"ok": True, "version": VERSION, "update_url": cfg["update_url"], "frozen": FROZEN})
+                if not cfg["update_url"]:
+                    return self.send_json({"ok": False, "error": "Δεν έχει οριστεί σύνδεσμος ενημερώσεων"})
+                info = check_update(cfg["update_url"])
+                if path == "/api/tech/check":
+                    return self.send_json({"ok": True, **info})
+                if path == "/api/tech/update":
+                    if not info["exe"]:
+                        return self.send_json({"ok": False, "error": "Το version.json δεν έχει πεδίο \"exe\""})
+                    apply_update(info["exe"])
+                    return self.send_json({"ok": True, "version": info["latest"]})
+            except Exception as e:  # δίκτυο, Drive, δικαιώματα αρχείων
+                return self.send_json({"ok": False, "error": str(e)})
+            return self.send_error(404)
         if path != "/api/config":
             return self.send_error(404)
         cfg = load_config()

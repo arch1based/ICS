@@ -170,13 +170,31 @@
       <span class="switch"><input type="checkbox" id="video_sound"><span></span></span></label>
   </div>
 
-  <footer>ITNow Signage · <a href="https://itnow.gr" target="_blank">itnow.gr</a></footer>
+  <footer>ITNow Signage <span id="ver"></span> · <a href="https://itnow.gr" target="_blank">itnow.gr</a> ·
+    <a href="#" onclick="techOpen(); return false" style="color:var(--muted);font-weight:500">🔧 Τεχνικός</a></footer>
 </main>
 
 <dialog id="dlg">
   <h2 id="dlgTitle">Νέος φάκελος</h2>
   <input id="dlgName" placeholder="π.χ. Προσφορές Σαββατοκύριακου" maxlength="60">
   <div class="act"><button class="btn ghost" onclick="dlg.close()">Άκυρο</button><button class="btn primary" onclick="createFolder()">Δημιουργία</button></div>
+</dialog>
+<dialog id="tech">
+  <div id="techLogin">
+    <h2>🔧 Είσοδος τεχνικού</h2>
+    <input id="pin" type="password" inputmode="numeric" placeholder="Κωδικός" maxlength="10">
+    <div class="act"><button class="btn ghost" onclick="tech.close()">Άκυρο</button><button class="btn primary" onclick="techLogin()">Είσοδος</button></div>
+  </div>
+  <div id="techPanel" hidden>
+    <h2>🔧 Αναβαθμίσεις</h2>
+    <p class="sub" style="margin:6px 0 0">Εγκατεστημένη έκδοση: <b id="techVer"></b></p>
+    <label class="label" style="display:block;margin-top:16px">Σύνδεσμος Google Drive του version.json</label>
+    <input id="updUrl" placeholder="https://drive.google.com/file/d/.../view" style="margin:8px 0 12px">
+    <div id="techMsg" class="sub" style="margin:0 0 16px;min-height:20px"></div>
+    <div class="act"><button class="btn ghost" onclick="tech.close()">Κλείσιμο</button>
+      <button class="btn" onclick="techCheck()">Έλεγχος</button>
+      <button class="btn primary" id="updBtn" onclick="techUpdate()" disabled>Αναβάθμιση</button></div>
+  </div>
 </dialog>
 <div class="toast" id="toast"></div>
 
@@ -203,6 +221,7 @@ async function load() {
   $('transition_ms').value = +s.transition_ms <= 800 ? 600 : +s.transition_ms >= 1800 ? 2000 : 1200;
   $('video_sound').checked = !!s.video_sound;
   setStatus(data.show_running);
+  $('ver').textContent = 'v' + data.version;
   render();
 }
 
@@ -293,12 +312,44 @@ async function createFolder() {
   openFolder(newGroup + '/' + name);
   load();
 }
+// ---- Τεχνικός / αναβαθμίσεις ----
+let pin = '';
+function techOpen() { $('techLogin').hidden = false; $('techPanel').hidden = true; $('pin').value = ''; $('tech').showModal(); $('pin').focus(); }
+async function techCall(path, extra = {}) {
+  const r = await fetch('/api/tech/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin, ...extra }) });
+  return r.json();
+}
+async function techLogin() {
+  pin = $('pin').value;
+  const r = await techCall('login');
+  if (!r.ok) { pin = ''; return toast('✖ Λάθος κωδικός'); }
+  $('techVer').textContent = r.version; $('updUrl').value = r.update_url; $('updBtn').disabled = true;
+  $('techMsg').textContent = r.frozen ? '' : 'Σημείωση: η αναβάθμιση λειτουργεί μόνο στην έκδοση .exe';
+  $('techLogin').hidden = true; $('techPanel').hidden = false;
+}
+async function techCheck() {
+  $('techMsg').textContent = 'Έλεγχος...';
+  const r = await techCall('check', { update_url: $('updUrl').value });
+  if (!r.ok) { $('techMsg').textContent = '✖ ' + r.error; return; }
+  $('updBtn').disabled = !r.available;
+  $('techMsg').innerHTML = r.available
+    ? `✨ Υπάρχει νέα έκδοση <b>${esc(r.latest)}</b>${r.notes ? ' — ' + esc(r.notes) : ''}`
+    : `✔ Έχετε την τελευταία έκδοση (${esc(r.current)})`;
+}
+async function techUpdate() {
+  $('updBtn').disabled = true; $('techMsg').textContent = '⏳ Λήψη και εγκατάσταση... μην κλείσετε τον υπολογιστή';
+  const r = await techCall('update', { update_url: $('updUrl').value });
+  if (!r.ok) { $('techMsg').textContent = '✖ ' + r.error; return; }
+  $('techMsg').textContent = `✔ Αναβαθμίστηκε σε ${r.version}. Επανεκκίνηση...`;
+  setTimeout(() => location.reload(), 8000);
+}
+$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') techLogin(); });
 $('dlgName').addEventListener('keydown', e => { if (e.key === 'Enter') createFolder(); });
 
 load();
 // Ανανέωση όταν επιστρέφει ο χρήστης στο παράθυρο (π.χ. μετά από αντιγραφή αρχείων)
 window.addEventListener('focus', load);
-setInterval(() => { if (!$('dlg').open && document.activeElement.tagName !== 'INPUT') load(); }, 15000);
+setInterval(() => { if (!$('dlg').open && !$('tech').open && document.activeElement.tagName !== 'INPUT') load(); }, 15000);
 </script>
 </body>
 </html>

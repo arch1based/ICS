@@ -3,3 +3,8 @@ schedule.json.tmp
 Προσφορές */**/*.*
 !Προσφορές */**/.keep
 __pycache__/
+build/*.ico
+icon.ico
+dist/
+build/ITNow-Signage/
+*.spec
