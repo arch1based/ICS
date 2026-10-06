@@ -1,5 +1,5 @@
 """
-ICS Signage - Πίνακας Ελέγχου (γραφικό περιβάλλον).
+ITNow Signage - Πίνακας Ελέγχου (γραφικό περιβάλλον).
 
 Ανοίγει παράθυρο όπου ο χρήστης:
   - ξεκινά / σταματά την προβολή σε πλήρη οθόνη
@@ -22,7 +22,7 @@ DAYS = ["Δευ", "Τρί", "Τετ", "Πέμ", "Παρ", "Σάβ", "Κυρ"]
 EFFECTS = [("Τυχαίο", "random"), ("Σβήσιμο", "fade"), ("Σύρσιμο", "slide"),
            ("Zoom", "zoom"), ("Γύρισμα", "flip"), ("Θόλωμα", "blur")]
 URL = f"http://localhost:{server.PORT}/"
-PROFILE = os.path.join(os.environ.get("LOCALAPPDATA", server.BASE), "ICS-Signage-Browser")
+PROFILE = os.path.join(os.environ.get("LOCALAPPDATA", server.BASE), "ITNow-Signage-Browser")
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
@@ -39,7 +39,7 @@ def find_browser():
 def start_show():
     exe = find_browser()
     if not exe:
-        messagebox.showerror("ICS Signage", "Δεν βρέθηκε Microsoft Edge ή Google Chrome.")
+        messagebox.showerror("ITNow Signage", "Δεν βρέθηκε Microsoft Edge ή Google Chrome.")
         return
     subprocess.Popen([exe, "--kiosk", URL, "--edge-kiosk-type=fullscreen",
                       "--autoplay-policy=no-user-gesture-required", "--no-first-run",
@@ -50,7 +50,7 @@ def start_show():
 def stop_show():
     if os.name != "nt":
         return
-    ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*ICS-Signage-Browser*' } "
+    ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*ITNow-Signage-Browser*' } "
           "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
     subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=NO_WINDOW)
 
@@ -64,7 +64,7 @@ def open_folder(path):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("ICS Signage — Προβολή Προσφορών")
+        self.title("ITNow Signage — Προβολή Προσφορών  |  itnow.gr")
         self.geometry("1120x660")
         self.minsize(820, 500)
         style = ttk.Style(self)
@@ -174,7 +174,7 @@ class App(tk.Tk):
                     try:
                         datetime.date.fromisoformat(v.get().strip())
                     except ValueError:
-                        messagebox.showerror("ICS Signage", f"Λάθος ημερομηνία: {v.get()}\nΓράψτε π.χ. 2026-10-31")
+                        messagebox.showerror("ITNow Signage", f"Λάθος ημερομηνία: {v.get()}\nΓράψτε π.χ. 2026-10-31")
                         return
         cfg = server.load_config()
         cfg["image_seconds"] = max(2, int(self.secs.get() or 8))
@@ -185,7 +185,7 @@ class App(tk.Tk):
                                      "from": fr.get().strip(), "to": to.get().strip()}
         server.save_config(cfg)
         self.refresh()
-        messagebox.showinfo("ICS Signage", "Αποθηκεύτηκε! Οι αλλαγές ισχύουν από τον επόμενο γύρο της προβολής.")
+        messagebox.showinfo("ITNow Signage", "Αποθηκεύτηκε! Οι αλλαγές ισχύουν από τον επόμενο γύρο της προβολής.")
 
 
 def main():
@@ -202,7 +202,7 @@ def main():
         app.iconify()
 
     def on_close():
-        if messagebox.askyesno("ICS Signage", "Αν κλείσει αυτό το παράθυρο θα σταματήσει και η προβολή.\nΚλείσιμο;"):
+        if messagebox.askyesno("ITNow Signage", "Αν κλείσει αυτό το παράθυρο θα σταματήσει και η προβολή.\nΚλείσιμο;"):
             stop_show()
             app.destroy()
     if srv:

@@ -1,4 +1,4 @@
-"""Εγκατάσταση ICS Signage στο C:\\ICS-Signage + συντομεύσεις επιφάνειας εργασίας & αυτόματης εκκίνησης."""
+"""Εγκατάσταση ITNow Signage στο C:\\ITNow-Signage + συντομεύσεις επιφάνειας εργασίας & αυτόματης εκκίνησης."""
 import os
 import shutil
 import subprocess
@@ -7,8 +7,8 @@ import sys
 import server
 
 SRC = os.path.dirname(os.path.abspath(__file__))
-DEST = r"C:\ICS-Signage"
-FILES = ["server.py", "ICS-Signage.pyw", "README.md"]
+DEST = r"C:\ITNow-Signage"
+FILES = ["server.py", "ITNow-Signage.pyw", "README.md"]
 
 
 def shortcut(lnk, target, args="", workdir="", icon=""):
@@ -38,13 +38,13 @@ def main():
         os.makedirs(os.path.join(DEST, server.GROUPS[0], sub), exist_ok=True)
 
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-    app = os.path.join(DEST, "ICS-Signage.pyw")
+    app = os.path.join(DEST, "ITNow-Signage.pyw")
     desktop, startup = special("Desktop"), special("Startup")
     print("Δημιουργία συντομεύσεων...")
-    shortcut(os.path.join(desktop, "ICS Signage - Πίνακας Ελέγχου.lnk"), pyw, f'"{app}"', DEST,
+    shortcut(os.path.join(desktop, "ITNow Signage - Πίνακας Ελέγχου.lnk"), pyw, f'"{app}"', DEST,
              r"%SystemRoot%\System32\imageres.dll,186")
-    shortcut(os.path.join(desktop, "ICS Signage - Φάκελος Προσφορών.lnk"), DEST, "", DEST)
-    shortcut(os.path.join(startup, "ICS Signage.lnk"), pyw, f'"{app}" --autostart', DEST)
+    shortcut(os.path.join(desktop, "ITNow Signage - Φάκελος Προσφορών.lnk"), DEST, "", DEST)
+    shortcut(os.path.join(startup, "ITNow Signage.lnk"), pyw, f'"{app}" --autostart', DEST)
     print("\nΗ εγκατάσταση ολοκληρώθηκε!")
     subprocess.Popen([pyw, app], cwd=DEST)
 

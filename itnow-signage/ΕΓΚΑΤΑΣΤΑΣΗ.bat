@@ -2,7 +2,7 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 echo ================================================
-echo   ICS Signage - Εγκατάσταση στο C:\ICS-Signage
+echo   ITNow Signage - Εγκατάσταση στο C:\ITNow-Signage
 echo ================================================
 echo.
 where python >nul 2>nul

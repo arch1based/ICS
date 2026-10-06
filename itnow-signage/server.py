@@ -1,5 +1,5 @@
 """
-ICS Store Signage - τοπικός server για προβολή προσφορών σε οθόνη καταστήματος.
+ITNow Signage - τοπικός server για προβολή προσφορών σε οθόνη καταστήματος.
 
 Μόνο Python standard library (χωρίς εγκαταστάσεις).
   Προβολή:   http://localhost:8765/
@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = 8765
 BASE = os.path.dirname(os.path.abspath(sys.argv[0] if getattr(sys, "frozen", False) else __file__))
-MEDIA = BASE  # οι φάκελοι προσφορών βρίσκονται δίπλα στο πρόγραμμα (C:\ICS-Signage\...)
+MEDIA = BASE  # οι φάκελοι προσφορών βρίσκονται δίπλα στο πρόγραμμα (C:\ITNow-Signage\...)
 CONFIG = os.path.join(BASE, "schedule.json")
 
 # Οι δύο βασικοί φάκελοι: πρώτα παίζουν της εβδομάδας, μετά (έξτρα) της ημέρας
@@ -217,7 +217,7 @@ def make_server():
 
 def main():
     srv = make_server()
-    print(f"ICS Store Signage τρέχει στο http://localhost:{PORT}/  (ρυθμίσεις: /admin)")
+    print(f"ITNow Signage τρέχει στο http://localhost:{PORT}/  (ρυθμίσεις: /admin)")
     print(f"Φάκελος αρχείων: {MEDIA}")
     srv.serve_forever()
 
