@@ -24,7 +24,7 @@
 - Θύρες: TCP 8765 (σύνδεση) και UDP 8766 (αυτόματη εύρεση).
 
 ## Οδηγός για τον πελάτη
-Έτοιμος για εκτύπωση: [`docs/ITNow-Signage-Οδηγός.pdf`](docs/ITNow-Signage-Οδηγός.pdf) (πηγή: `docs/manual.html`).
+Έτοιμος για εκτύπωση: [`docs/ITNow-Signage-Odigos.pdf`](docs/ITNow-Signage-Odigos.pdf) (πηγή: `docs/manual.html`).
 
 ## Αυτόματη εκκίνηση & Demo
 - Με το άνοιγμα των Windows ξεκινά **πάντα** ο server στο παρασκήνιο. Η προβολή ξεκινά πάντα στις οθόνες· στον κεντρικό μόνο αν την είχατε αφήσει να παίζει.

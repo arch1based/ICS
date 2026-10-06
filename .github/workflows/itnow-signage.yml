@@ -62,4 +62,4 @@ jobs:
           files: |
             itnow-signage/dist/ITNow-Signage.exe
             itnow-signage/dist/version.json
-            itnow-signage/docs/ITNow-Signage-Οδηγός.pdf
+            itnow-signage/docs/ITNow-Signage-Odigos.pdf
