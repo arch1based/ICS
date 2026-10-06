@@ -17,7 +17,7 @@
 <div id="a" class="slide"></div>
 <div id="b" class="slide"></div>
 <div id="msg">Δεν υπάρχουν ενεργές προσφορές για σήμερα.<br><br>
-  Βάλε εικόνες/βίντεο στους φακέλους και ρύθμισε τις μέρες στο <a href="/admin">/admin</a></div>
+  Βάλε εικόνες/βίντεο στους φακέλους και ρύθμισε τις μέρες από τον Πίνακα Ελέγχου</div>
 <script>
 const EFFECTS = {
   fade:  { from: { opacity: 0 },                                   to: { opacity: 1 } },
@@ -97,7 +97,6 @@ setInterval(() => {
   if (cfg.date && cfg.date !== new Date().toLocaleDateString('sv')) { idx = list.length; }
 }, 60000);
 document.addEventListener('keydown', e => {
-  if (e.key === 'F2') location.href = '/admin';
   if (e.key === 'ArrowRight') next();
 });
 

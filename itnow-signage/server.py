@@ -9,6 +9,7 @@ import datetime
 import json
 import mimetypes
 import os
+import subprocess
 import sys
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -108,6 +109,70 @@ def campaigns_info(today):
     return cfg, info
 
 
+# ---------------- Έλεγχος οθόνης προβολής (Edge/Chrome) ----------------
+URL = f"http://localhost:{PORT}/"
+PROFILE_ROOT = os.path.join(os.environ.get("LOCALAPPDATA", BASE), "ITNow-Signage")
+NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+show_running = False
+
+
+def find_browser():
+    for env in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+        base = os.environ.get(env)
+        for rel in (r"Microsoft\Edge\Application\msedge.exe", r"Google\Chrome\Application\chrome.exe"):
+            if base and os.path.isfile(os.path.join(base, rel)):
+                return os.path.join(base, rel)
+    return None
+
+
+def start_show():
+    global show_running
+    exe = find_browser()
+    if not exe:
+        return False
+    stop_show()
+    subprocess.Popen([exe, "--kiosk", URL, "--edge-kiosk-type=fullscreen",
+                      "--autoplay-policy=no-user-gesture-required", "--no-first-run",
+                      "--disable-features=Translate", "--disable-session-crashed-bubble",
+                      "--user-data-dir=" + os.path.join(PROFILE_ROOT, "show")])
+    show_running = True
+    return True
+
+
+def stop_show():
+    global show_running
+    show_running = False
+    if os.name == "nt":
+        ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*ITNow-Signage\\show*' } "
+              "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
+        subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=NO_WINDOW)
+
+
+def open_panel():
+    """Ανοίγει τον Πίνακα Ελέγχου σαν ξεχωριστή εφαρμογή (παράθυρο χωρίς μπάρα browser)."""
+    exe = find_browser()
+    if exe:
+        subprocess.Popen([exe, f"--app={URL}admin", "--window-size=1280,860", "--no-first-run",
+                          "--user-data-dir=" + os.path.join(PROFILE_ROOT, "panel")])
+    else:
+        import webbrowser
+        webbrowser.open(URL + "admin")
+
+
+def open_folder(path):
+    os.makedirs(path, exist_ok=True)
+    if os.name == "nt":
+        os.startfile(path)
+
+
+def safe_folder(key):
+    full = os.path.realpath(os.path.join(MEDIA, *key.split("/")))
+    if any(full == os.path.realpath(os.path.join(MEDIA, g)) or
+           full.startswith(os.path.realpath(os.path.join(MEDIA, g)) + os.sep) for g in GROUPS):
+        return full
+    return None
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -180,7 +245,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/config":
             cfg, info = campaigns_info(datetime.date.today())
             cfg = {k: v for k, v in cfg.items() if k != "campaigns"}
-            return self.send_json({"settings": cfg, "campaigns": info, "media_dir": MEDIA})
+            return self.send_json({"settings": cfg, "campaigns": info, "media_dir": MEDIA,
+                                   "groups": GROUPS, "show_running": show_running,
+                                   "today": datetime.date.today().weekday()})
         if path.startswith("/media/"):
             full = os.path.realpath(os.path.join(MEDIA, path[len("/media/"):]))
             if not any(full.startswith(os.path.realpath(os.path.join(MEDIA, g)) + os.sep) for g in GROUPS):
@@ -189,12 +256,27 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        if urllib.parse.urlparse(self.path).path != "/api/config":
-            return self.send_error(404)
+        path = urllib.parse.urlparse(self.path).path
         try:
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8") or "{}")
         except ValueError:
             return self.send_json({"ok": False}, 400)
+        if path == "/api/show":
+            ok = start_show() if body.get("action") == "start" else (stop_show() or True)
+            return self.send_json({"ok": ok, "show_running": show_running})
+        if path == "/api/open":
+            folder = safe_folder(body.get("key", ""))
+            if folder:
+                open_folder(folder)
+            return self.send_json({"ok": bool(folder)})
+        if path == "/api/folder":
+            name = str(body.get("name", "")).strip()
+            if body.get("group") not in GROUPS or not name or any(c in name for c in '\\/:*?"<>|') or name in (".", ".."):
+                return self.send_json({"ok": False}, 400)
+            os.makedirs(os.path.join(MEDIA, body["group"], name), exist_ok=True)
+            return self.send_json({"ok": True})
+        if path != "/api/config":
+            return self.send_error(404)
         cfg = load_config()
         for k in ("image_seconds", "transition", "transition_ms", "video_sound"):
             if k in body.get("settings", {}):
