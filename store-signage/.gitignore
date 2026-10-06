@@ -1,5 +1,5 @@
 schedule.json
 schedule.json.tmp
-media/**/*.*
-!media/**/.keep
+Προσφορές */**/*.*
+!Προσφορές */**/.keep
 __pycache__/

@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = 8765
 BASE = os.path.dirname(os.path.abspath(sys.argv[0] if getattr(sys, "frozen", False) else __file__))
-MEDIA = os.path.join(BASE, "media")
+MEDIA = BASE  # οι φάκελοι προσφορών βρίσκονται δίπλα στο πρόγραμμα (C:\ICS-Signage\...)
 CONFIG = os.path.join(BASE, "schedule.json")
 
 # Οι δύο βασικοί φάκελοι: πρώτα παίζουν της εβδομάδας, μετά (έξτρα) της ημέρας
@@ -183,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"settings": cfg, "campaigns": info, "media_dir": MEDIA})
         if path.startswith("/media/"):
             full = os.path.realpath(os.path.join(MEDIA, path[len("/media/"):]))
-            if not full.startswith(os.path.realpath(MEDIA) + os.sep):
+            if not any(full.startswith(os.path.realpath(os.path.join(MEDIA, g)) + os.sep) for g in GROUPS):
                 return self.send_error(403)
             return self.send_file(full)
         self.send_error(404)
@@ -209,11 +209,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"ok": True})
 
 
-def main():
-    os.makedirs(MEDIA, exist_ok=True)
+def make_server():
     for g in GROUPS:
         os.makedirs(os.path.join(MEDIA, g), exist_ok=True)
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    return ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+
+
+def main():
+    srv = make_server()
     print(f"ICS Store Signage τρέχει στο http://localhost:{PORT}/  (ρυθμίσεις: /admin)")
     print(f"Φάκελος αρχείων: {MEDIA}")
     srv.serve_forever()
