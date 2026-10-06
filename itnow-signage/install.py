@@ -34,8 +34,6 @@ def main():
         shutil.copy2(os.path.join(SRC, "web", f), os.path.join(DEST, "web", f))
     for g in server.GROUPS:  # φάκελοι προσφορών + παραδείγματα (αν δεν υπάρχουν ήδη)
         os.makedirs(os.path.join(DEST, g), exist_ok=True)
-    for sub in ("Δευτέρα-Τετάρτη", "Πέμπτη-Κυριακή"):
-        os.makedirs(os.path.join(DEST, server.GROUPS[0], sub), exist_ok=True)
 
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     app = os.path.join(DEST, "ITNow-Signage.pyw")
