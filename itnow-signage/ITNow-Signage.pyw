@@ -6,6 +6,7 @@ ITNow Signage - εκκίνηση εφαρμογής (itnow.gr).
 
 Ο server μένει να τρέχει στο παρασκήνιο· κλείνοντας τον Πίνακα Ελέγχου η προβολή συνεχίζει.
 """
+import json
 import os
 import shutil
 import subprocess
@@ -19,10 +20,24 @@ INSTALL_DIR = r"C:\ITNow-Signage"
 EXE_NAME = "ITNow-Signage.exe"
 
 
-def message(text, error=False):
-    if os.name == "nt":
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(None, text, "ITNow Signage", 0x10 if error else 0x40)
+def message(text, error=False, yesno=False):
+    """Παράθυρο μηνύματος Windows. Με yesno=True επιστρέφει True για «Ναι»."""
+    if os.name != "nt":
+        return True
+    import ctypes
+    flags = 0x10 if error else (0x24 if yesno else 0x40)
+    return ctypes.windll.user32.MessageBoxW(None, text, "ITNow Signage", flags) == 6
+
+
+def open_firewall():
+    """Ο κεντρικός πρέπει να δέχεται συνδέσεις από τις οθόνες (ζητά άδεια διαχειριστή μία φορά)."""
+    exe = os.path.join(INSTALL_DIR, EXE_NAME)
+    script = os.path.join(INSTALL_DIR, "firewall.cmd")
+    with open(script, "w", encoding="ascii") as f:
+        f.write('netsh advfirewall firewall delete rule name="ITNow Signage"\r\n'
+                f'netsh advfirewall firewall add rule name="ITNow Signage" dir=in action=allow '
+                f'program="{exe}" enable=yes profile=any\r\n')
+    powershell(f"Start-Process '{script}' -Verb RunAs -WindowStyle Hidden -Wait")
 
 
 def powershell(cmd, capture=False):
@@ -43,23 +58,40 @@ def install():
     me = sys.executable
     dest = os.path.join(INSTALL_DIR, EXE_NAME)
     os.makedirs(INSTALL_DIR, exist_ok=True)
+    cfg_path = os.path.join(INSTALL_DIR, "schedule.json")
+    first_time = not os.path.exists(cfg_path)
+    if first_time:
+        central = message("Τι θα είναι αυτός ο υπολογιστής;\n\n"
+                          "ΝΑΙ  =  Κεντρικός υπολογιστής\n"
+                          "          (εδώ μπαίνουν οι φάκελοι και δίνονται οι εντολές)\n\n"
+                          "ΟΧΙ  =  Οθόνη προβολής\n"
+                          "          (παίζει ό,τι ορίζει ο κεντρικός υπολογιστής)", yesno=True)
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump({"mode": "central" if central else "client"}, f)
+    with open(cfg_path, encoding="utf-8") as f:
+        central = json.load(f).get("mode", "central") == "central"
     # αν τρέχει ήδη παλιά εγκατάσταση, την κλείνουμε για να αντικατασταθεί
     subprocess.run(["taskkill", "/f", "/im", EXE_NAME, "/fi", f"PID ne {os.getpid()}"],
                    capture_output=True, creationflags=server.NO_WINDOW)
     time.sleep(1)
     shutil.copy2(me, dest)
-    for g in server.GROUPS:
-        os.makedirs(os.path.join(INSTALL_DIR, g), exist_ok=True)
+    if central:
+        for g in server.GROUPS:
+            os.makedirs(os.path.join(INSTALL_DIR, g), exist_ok=True)
+        if first_time:
+            open_firewall()
     desktop = powershell("[Environment]::GetFolderPath('Desktop')")
     startup = powershell("[Environment]::GetFolderPath('Startup')")
     shortcut(os.path.join(desktop, "ITNow Signage.lnk"), dest)
-    shortcut(os.path.join(desktop, "ITNow Signage - Φάκελος Προσφορών.lnk"), INSTALL_DIR)
+    if central:
+        shortcut(os.path.join(desktop, "ITNow Signage - Φάκελος Προσφορών.lnk"), INSTALL_DIR)
     shortcut(os.path.join(startup, "ITNow Signage.lnk"), dest, "--autostart")
     message("Η εγκατάσταση ολοκληρώθηκε!\n\n"
             f"Φάκελος: {INSTALL_DIR}\n"
             "Στην επιφάνεια εργασίας θα βρείτε το «ITNow Signage».\n"
-            "Η προβολή θα ξεκινά αυτόματα με το άνοιγμα του υπολογιστή.")
-    subprocess.Popen([dest], cwd=INSTALL_DIR)
+            "Η προβολή θα ξεκινά αυτόματα με το άνοιγμα του υπολογιστή."
+            + ("" if central else "\n\nΗ οθόνη θα βρει μόνη της τον κεντρικό υπολογιστή στο δίκτυο."))
+    subprocess.Popen([dest] + ([] if central else ["--autostart"]), cwd=INSTALL_DIR)
 
 
 def main():

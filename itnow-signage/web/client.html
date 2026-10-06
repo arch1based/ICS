@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ITNow Signage</title>
+<title>ITNow Signage — Οθόνη</title>
 <style>
   :root {
     --bg: #f4f6fb; --surface: #ffffff; --surface-2: #f0f2f8; --border: #e3e7f0;
@@ -141,6 +141,18 @@
   dialog input { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; margin: 14px 0 18px; }
   dialog .act { display: flex; justify-content: flex-end; gap: 8px; }
   @media (max-width: 760px) { .week { grid-template-columns: repeat(2, 1fr); } header .status { display: none; } }
+  .hero { padding: 28px; display: flex; gap: 22px; align-items: center; margin-bottom: 18px; }
+  .big-ic { width: 72px; height: 72px; border-radius: 20px; display: grid; place-items: center; flex: none; background: var(--surface-2); color: var(--muted); }
+  .big-ic.on { background: var(--ok-soft); color: var(--ok); }
+  .big-ic.off { background: var(--danger-soft); color: var(--danger); }
+  .hero h2 { font-size: 22px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .stat { padding: 18px; }
+  .stat b { display: block; font-size: 22px; margin-top: 4px; letter-spacing: -.01em; word-break: break-word; }
+  .form { padding: 22px; display: grid; gap: 16px; }
+  .form label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .form input { padding: 11px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; }
+  .form .row2 { display: flex; gap: 10px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -157,47 +169,33 @@
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>Έναρξη προβολής</button>
   </div>
 </header>
-
 <main class="wrap">
-  <h1 id="hello">Καλησπέρα 👋</h1>
-  <p class="sub" id="todayLine"></p>
+  <h1>Οθόνη προβολής</h1>
+  <p class="sub">Αυτός ο υπολογιστής παίζει ό,τι ορίζει ο κεντρικός υπολογιστής. Οι φάκελοι και οι μέρες ρυθμίζονται από τον κεντρικό.</p>
 
-  <div class="card week" id="week"></div>
+  <div class="card hero"><div class="big-ic" id="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="19.5" r="1"/></svg></div>
+    <div><h2 id="conn">...</h2><div class="sub" style="margin:4px 0 0" id="connSub"></div></div></div>
 
-  <div class="group-head"><h2>Οθόνες</h2><span class="tag">Οι υπολογιστές-οθόνες εμφανίζονται εδώ μόλις εγκατασταθούν στο ίδιο δίκτυο</span></div>
-  <div class="screens" id="screens"></div>
+  <div class="stats">
+    <div class="card stat"><span class="label">Όνομα οθόνης</span><b id="sName"></b></div>
+    <div class="card stat"><span class="label">Κεντρικός</span><b id="sHost"></b></div>
+    <div class="card stat"><span class="label">Αρχεία για σήμερα</span><b id="sItems"></b></div>
+    <div class="card stat"><span class="label">Έκδοση</span><b id="sVer"></b></div>
+  </div>
 
-  <div id="groups"></div>
-
-  <div class="group-head"><h2>Ρυθμίσεις προβολής</h2></div>
-  <div class="card settings">
-    <label>Χρόνος ανά εικόνα
-      <select id="image_seconds">
-        <option value="5">5 δευτερόλεπτα</option><option value="8">8 δευτερόλεπτα</option><option value="10">10 δευτερόλεπτα</option>
-        <option value="15">15 δευτερόλεπτα</option><option value="20">20 δευτερόλεπτα</option><option value="30">30 δευτερόλεπτα</option>
-      </select></label>
-    <label>Εφέ αλλαγής
-      <select id="transition">
-        <option value="random">✨ Τυχαίο</option><option value="fade">Σβήσιμο</option><option value="slide">Σύρσιμο</option>
-        <option value="zoom">Zoom</option><option value="flip">Γύρισμα 3D</option><option value="blur">Θόλωμα</option>
-      </select></label>
-    <label>Ταχύτητα εφέ
-      <select id="transition_ms">
-        <option value="600">Γρήγορη</option><option value="1200">Κανονική</option><option value="2000">Αργή</option>
-      </select></label>
-    <label class="row">Ήχος στα βίντεο
-      <span class="switch"><input type="checkbox" id="video_sound"><span></span></span></label>
+  <div class="group-head"><h2>Ρυθμίσεις σύνδεσης</h2></div>
+  <div class="card form">
+    <label>Όνομα αυτής της οθόνης (όπως θα φαίνεται στον κεντρικό)
+      <input id="name" maxlength="60" placeholder="π.χ. Ταμείο 1"></label>
+    <label>Διεύθυνση κεντρικού υπολογιστή (κενό = αυτόματη αναζήτηση)
+      <input id="host" placeholder="π.χ. 192.168.1.10"></label>
+    <div class="row2"><button class="btn primary" onclick="saveClient()">💾 Αποθήκευση</button>
+      <button class="btn" onclick="discover()">🔍 Αυτόματη αναζήτηση κεντρικού</button></div>
   </div>
 
   <footer>ITNow Signage <span id="ver"></span> · <a href="https://itnow.gr" target="_blank">itnow.gr</a> ·
     <a href="#" onclick="techOpen(); return false" style="color:var(--muted);font-weight:500">🔧 Τεχνικός</a></footer>
 </main>
-
-<dialog id="dlg">
-  <h2 id="dlgTitle">Νέος φάκελος</h2>
-  <input id="dlgName" placeholder="π.χ. Προσφορές Σαββατοκύριακου" maxlength="60">
-  <div class="act"><button class="btn ghost" onclick="dlg.close()">Άκυρο</button><button class="btn primary" onclick="createFolder()">Δημιουργία</button></div>
-</dialog>
 <dialog id="tech">
   <div id="techLogin">
     <h2>🔧 Είσοδος τεχνικού</h2>
@@ -210,168 +208,49 @@
     <label class="label" style="display:block;margin-top:16px">Σύνδεσμος Google Drive του version.json</label>
     <input id="updUrl" placeholder="https://drive.google.com/file/d/.../view" style="margin:8px 0 12px">
     <div id="techMsg" class="sub" style="margin:0 0 16px;min-height:20px"></div>
-    <p class="sub" style="margin:0 0 16px;font-size:13px">Ρόλος: <b>Κεντρικός υπολογιστής</b> ·
-      <a href="#" onclick="techMode('client'); return false" style="color:var(--accent)">Μετατροπή σε οθόνη</a></p>
+    <p class="sub" style="margin:0 0 16px;font-size:13px">Ρόλος: <b>Οθόνη</b> ·
+      <a href="#" onclick="techMode('central'); return false" style="color:var(--accent)">Μετατροπή σε κεντρικό</a></p>
     <div class="act"><button class="btn ghost" onclick="tech.close()">Κλείσιμο</button>
       <button class="btn" onclick="techCheck()">Έλεγχος</button>
       <button class="btn primary" id="updBtn" onclick="techUpdate()" disabled>Αναβάθμιση</button></div>
   </div>
 </dialog>
 <div class="toast" id="toast"></div>
-
 <script>
-const DAYS = ['Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ', 'Κυρ'];
-const DAYS_FULL = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο', 'Κυριακή'];
-const PRESETS = [['Όλες', [0,1,2,3,4,5,6]], ['Καθημερινές', [0,1,2,3,4]], ['Σαβ/κο', [5,6]], ['Δευ–Τετ', [0,1,2]], ['Πέμ–Κυρ', [3,4,5,6]], ['Καμία', []]];
-const ICON_FOLDER = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-let data, newGroup;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' });
   return r.json();
 }
-
+let first = true;
 async function load() {
-  data = await api('/api/config');
-  const s = data.settings;
-  $('image_seconds').value = [5,8,10,15,20,30].includes(+s.image_seconds) ? s.image_seconds : 8;
-  $('transition').value = s.transition;
-  $('transition_ms').value = +s.transition_ms <= 800 ? 600 : +s.transition_ms >= 1800 ? 2000 : 1200;
-  $('video_sound').checked = !!s.video_sound;
-  setStatus(data.show_running);
-  $('ver').textContent = 'v' + data.version;
-  render();
+  const d = await api('/api/client');
+  $('status').classList.toggle('on', d.show_running);
+  $('statusText').textContent = d.show_running ? 'Σε προβολή' : 'Εκτός προβολής';
+  $('ic').className = 'big-ic ' + (d.connected ? 'on' : 'off');
+  $('conn').textContent = d.connected ? 'Συνδεδεμένη με τον κεντρικό' : (d.ago === null ? 'Αναζήτηση κεντρικού...' : 'Χωρίς σύνδεση — παίζει από το αποθηκευμένο αντίγραφο');
+  $('connSub').textContent = d.ago !== null ? `Τελευταίος συγχρονισμός πριν από ${d.ago < 60 ? d.ago + ' δευτ.' : Math.round(d.ago / 60) + ' λεπτά'}` : (d.error || '');
+  $('sName').textContent = d.screen_name; $('sHost').textContent = d.host || d.central_host || '—';
+  $('sItems').textContent = d.today_items; $('sVer').textContent = d.version; $('ver').textContent = 'v' + d.version;
+  if (first) { $('name').value = d.screen_name; $('host').value = d.central_host; first = false; }
 }
-
-function setStatus(on) {
-  $('status').classList.toggle('on', on);
-  $('statusText').textContent = on ? 'Σε προβολή' : 'Εκτός προβολής';
+async function saveClient() {
+  await api('/api/client', { screen_name: $('name').value, central_host: $('host').value.trim() });
+  toast('✔ Αποθηκεύτηκε'); setTimeout(load, 1500);
 }
-
-function render() {
-  renderScreens();
-  const h = new Date().getHours();
-  $('hello').textContent = (h < 12 ? 'Καλημέρα' : h < 20 ? 'Καλησπέρα' : 'Καλό βράδυ') + ' 👋';
-  const live = data.campaigns.filter(c => c.active);
-  $('todayLine').textContent = `Σήμερα ${DAYS_FULL[data.today]} — ` + (live.length
-    ? `παίζουν ${live.length} ${live.length === 1 ? 'φάκελος' : 'φάκελοι'} με ${live.reduce((a, c) => a + c.count, 0)} αρχεία.`
-    : 'δεν παίζει τίποτα ακόμα. Βάλε αρχεία σε έναν φάκελο και διάλεξε μέρες.');
-
-  // Εβδομάδα με μια ματιά
-  $('week').innerHTML = DAYS_FULL.map((d, i) => {
-    const items = data.campaigns.filter(c => c.enabled && c.count && c.days.includes(i));
-    return `<div class="day ${i === data.today ? 'today' : ''}"><h3>${d}${i === data.today ? '<span>Σήμερα</span>' : ''}</h3>
-      ${items.map(c => `<span class="chip ${c.group === data.groups[0] ? 'w' : 'd'}" title="${esc(c.name)}">${esc(c.name)}</span>`).join('') || '<span class="empty-day">—</span>'}</div>`;
-  }).join('');
-
-  // Φάκελοι ανά ομάδα
-  $('groups').innerHTML = data.groups.map((g, gi) => {
-    const list = data.campaigns.map((c, i) => [c, i]).filter(([c]) => c.group === g);
-    return `<div class="group-head"><h2>${esc(g)}</h2><span class="tag">${gi === 0 ? 'Παίζουν πρώτα' : 'Παίζουν έξτρα, μετά τις εβδομάδας'}</span>
-        <div class="spacer"></div><button class="btn ghost" data-k="${esc(g)}" onclick="openFolder(this.dataset.k)">${ICON_FOLDER} Άνοιγμα</button></div>
-      <div class="grid">${list.map(([c, i]) => card(c, i, gi)).join('')}
-        <button class="add" onclick="askFolder(${gi})">＋ Νέος φάκελος</button></div>`;
-  }).join('');
+async function discover() {
+  toast('🔍 Αναζήτηση...');
+  const r = await api('/api/client', { discover: true });
+  $('host').value = r.central_host;
+  toast(r.central_host ? '✔ Βρέθηκε: ' + r.central_host : '✖ Δεν βρέθηκε κεντρικός στο δίκτυο');
+  setTimeout(load, 1500);
 }
-
-const ICON_SCREEN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>';
-function renderScreens() {
-  $('screens').innerHTML = data.screens.map(s => {
-    const st = !s.online ? ['Εκτός σύνδεσης', ''] : s.running ? ['Παίζει', 'play'] : ['Συνδεδεμένη', 'on'];
-    const seen = s.local ? 'Κεντρικός · αυτός ο υπολογιστής' : !s.online && s.last_seen ? 'Τελευταία φορά: ' + new Date(s.last_seen * 1000).toLocaleString('el-GR') : (s.ip || '');
-    return `<div class="card scr ${s.online ? 'on' : ''}">
-      <div class="scr-top"><div class="scr-ic">${ICON_SCREEN}</div>
-        <div style="min-width:0"><div class="scr-name">${esc(s.name)}</div>
-          <div class="scr-meta">${esc(seen)}${s.version ? ' · v' + esc(s.version) : ''}</div></div>
-        <span class="pill ${st[1]}">${s.pending ? '⏳ ' : ''}${st[0]}</span></div>
-      <div class="scr-act">
-        <button class="btn" data-n="${esc(s.name)}" onclick="screenCmd(this.dataset.n, 'start')">▶ Έναρξη</button>
-        <button class="btn" data-n="${esc(s.name)}" onclick="screenCmd(this.dataset.n, 'stop')">■ Διακοπή</button>
-        ${!s.local && !s.online ? `<button class="btn ghost" title="Αφαίρεση" data-n="${esc(s.name)}" onclick="screenCmd(this.dataset.n, 'forget')">✕</button>` : ''}
-      </div></div>`;
-  }).join('');
-}
-async function screenCmd(name, action) {
-  if (action === 'forget' && !confirm(`Αφαίρεση της οθόνης «${name}» από τη λίστα;`)) return;
-  await api('/api/screen', { name, action });
-  toast(action === 'start' ? '▶ Στάλθηκε εντολή έναρξης' : action === 'stop' ? '■ Στάλθηκε εντολή διακοπής' : '✔ Αφαιρέθηκε');
-  load();
-}
-
-function screenSel(c, i) {
-  if (data.screens.length < 2) return '';  // μόνο ο κεντρικός — δεν χρειάζεται επιλογή
-  const all = !c.screens.length;
-  return `<div><div class="label" style="margin-bottom:8px">Οθόνες</div><div class="scr-sel">
-    <button class="${all ? 'on' : ''}" onclick='upd(${i}, {screens: []})'>Όλες</button>
-    ${data.screens.map(s => `<button class="${!all && c.screens.includes(s.name) ? 'on' : ''}" data-n="${esc(s.name)}" onclick="toggleScreen(${i}, this.dataset.n)">${esc(s.name)}</button>`).join('')}
-  </div></div>`;
-}
-function toggleScreen(i, name) {
-  const set = new Set(data.campaigns[i].screens);
-  set.has(name) ? set.delete(name) : set.add(name);
-  upd(i, { screens: [...set] });
-}
-
-function card(c, i, gi) {
-  const thumbs = c.files.slice(0, 3).map(f => f.type === 'video'
-    ? `<video src="${f.url}#t=1" muted preload="metadata"></video>` : `<img src="${f.url}" loading="lazy" alt="">`).join('');
-  const more = c.files.length > 3 ? `<div class="more">+${c.files.length - 3}</div>` : '';
-  return `<div class="card folder ${c.enabled ? '' : 'off'}">
-    <div class="f-top"><div class="f-icon ${gi ? 'd' : ''}">${ICON_FOLDER}</div>
-      <div style="min-width:0"><div class="f-name">${esc(c.name)}</div>
-        <div class="f-meta">${c.count} ${c.count === 1 ? 'αρχείο' : 'αρχεία'}${c.active ? '<span class="live">● Παίζει σήμερα</span>' : ''}</div></div>
-      <label class="switch" title="Ενεργός"><input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="upd(${i}, {enabled: this.checked})"><span></span></label></div>
-    <div class="thumbs" data-k="${esc(c.key)}" onclick="openFolder(this.dataset.k)" style="cursor:pointer" title="Άνοιγμα φακέλου">
-      ${thumbs || '<div class="none">Ο φάκελος είναι άδειος — κλικ για να βάλεις εικόνες/βίντεο</div>'}${more}</div>
-    <div><div class="label" style="margin-bottom:8px">Ημέρες προβολής</div>
-      <div class="days">${DAYS.map((d, n) => `<button class="${c.days.includes(n) ? 'on' : ''}" onclick="toggleDay(${i}, ${n})">${d}</button>`).join('')}</div></div>
-    <div class="presets">${PRESETS.map(([l, v]) => `<button onclick='upd(${i}, {days: ${JSON.stringify(v)}})'>${l}</button>`).join('')}</div>
-    ${screenSel(c, i)}
-    <div class="dates">Από <input type="date" value="${c.from}" onchange="upd(${i}, {from: this.value})">
-      έως <input type="date" value="${c.to}" onchange="upd(${i}, {to: this.value})"></div>
-    <div class="f-actions"><span class="label" style="text-transform:none;letter-spacing:0;font-weight:500">${c.from || c.to ? 'Με χρονικό όριο' : 'Χωρίς λήξη'}</span>
-      <button class="btn ghost" data-k="${esc(c.key)}" onclick="openFolder(this.dataset.k)">${ICON_FOLDER} Άνοιγμα φακέλου</button></div>
-  </div>`;
-}
-
-async function upd(i, patch) {
-  const c = Object.assign(data.campaigns[i], patch);
-  await api('/api/config', { campaigns: [{ key: c.key, enabled: c.enabled, days: c.days, from: c.from, to: c.to, screens: c.screens }] });
-  toast('✔ Αποθηκεύτηκε');
-  load();
-}
-function toggleDay(i, n) {
-  const d = new Set(data.campaigns[i].days);
-  d.has(n) ? d.delete(n) : d.add(n);
-  upd(i, { days: [...d].sort() });
-}
-async function saveSettings() {
-  await api('/api/config', { settings: {
-    image_seconds: +$('image_seconds').value, transition: $('transition').value,
-    transition_ms: +$('transition_ms').value, video_sound: $('video_sound').checked } });
-  toast('✔ Αποθηκεύτηκε');
-}
-['image_seconds', 'transition', 'transition_ms', 'video_sound'].forEach(id => $(id).onchange = saveSettings);
-
 async function show(action) {
   const r = await api('/api/show', { action });
   if (action === 'start' && !r.ok) return toast('Δεν βρέθηκε Edge ή Chrome');
-  setStatus(r.show_running);
-  toast(action === 'start' ? '▶ Η προβολή ξεκίνησε' : '■ Η προβολή σταμάτησε');
-}
-function openFolder(key) { api('/api/open', { key }); }
-function askFolder(gi) { newGroup = data.groups[gi]; $('dlgTitle').textContent = 'Νέος φάκελος — ' + newGroup; $('dlgName').value = ''; $('dlg').showModal(); }
-async function createFolder() {
-  const name = $('dlgName').value.trim();
-  if (!name) return;
-  if (/[\\/:*?"<>|]/.test(name)) return toast('Το όνομα δεν μπορεί να έχει \\ / : * ? " < > |');
-  await api('/api/folder', { group: newGroup, name });
-  $('dlg').close();
-  openFolder(newGroup + '/' + name);
-  load();
+  toast(action === 'start' ? '▶ Η προβολή ξεκίνησε' : '■ Η προβολή σταμάτησε'); load();
 }
 // ---- Τεχνικός / αναβαθμίσεις ----
 let pin = '';
@@ -411,12 +290,9 @@ async function techMode(mode) {
   setTimeout(() => location.reload(), 5000);
 }
 $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') techLogin(); });
-$('dlgName').addEventListener('keydown', e => { if (e.key === 'Enter') createFolder(); });
 
 load();
-// Ανανέωση όταν επιστρέφει ο χρήστης στο παράθυρο (π.χ. μετά από αντιγραφή αρχείων)
-window.addEventListener('focus', load);
-setInterval(() => { if (!$('dlg').open && !$('tech').open && document.activeElement.tagName !== 'INPUT') load(); }, 15000);
+setInterval(() => { if (!$('tech').open && document.activeElement.tagName !== 'INPUT') load(); }, 5000);
 </script>
 </body>
 </html>
