@@ -35,7 +35,7 @@ jobs:
         run: python build/make_icon.py
 
       - name: Build exe
-        run: pyinstaller --noconfirm --onefile --noconsole --name ITNow-Signage --icon icon.ico --add-data "web;web" ITNow-Signage.pyw
+        run: pyinstaller --noconfirm --onefile --noconsole --name ITNow-Signage --icon icon.ico --add-data "web;web" --add-data "demo;demo" ITNow-Signage.pyw
 
       - name: version.json (πρότυπο για το Google Drive)
         shell: bash
@@ -62,3 +62,4 @@ jobs:
           files: |
             itnow-signage/dist/ITNow-Signage.exe
             itnow-signage/dist/version.json
+            itnow-signage/docs/ITNow-Signage-Οδηγός.pdf

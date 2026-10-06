@@ -2,7 +2,7 @@
 ITNow Signage - εκκίνηση εφαρμογής (itnow.gr).
 
   ITNow-Signage.exe              -> 1η φορά: εγκατάσταση στο C:\\ITNow-Signage, μετά: Πίνακας Ελέγχου
-  ITNow-Signage.exe --autostart  -> (εκκίνηση Windows) ξεκινά κατευθείαν την προβολή
+  ITNow-Signage.exe --autostart  -> (εκκίνηση Windows) ξεκινά τον server στο παρασκήνιο και την προβολή
 
 Ο server μένει να τρέχει στο παρασκήνιο· κλείνοντας τον Πίνακα Ελέγχου η προβολή συνεχίζει.
 """
@@ -118,7 +118,10 @@ def main():
             time.sleep(0.5)
 
     if "--autostart" in sys.argv:
-        threading.Thread(target=lambda: (time.sleep(2), server.start_show()), daemon=True).start()
+        # Με τα Windows ξεκινά πάντα ο server· η προβολή ξεκινά στις οθόνες και στον κεντρικό
+        # μόνο αν την είχαν αφήσει να παίζει (ή αν έπαιζε πριν από αναβάθμιση).
+        if "--after-update" in sys.argv or server.play_on_boot():
+            threading.Thread(target=lambda: (time.sleep(3), server.start_show()), daemon=True).start()
     elif "--after-update" not in sys.argv:
         server.open_panel()
     if srv:

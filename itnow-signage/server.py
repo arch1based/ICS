@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 CENTRAL_PORT = 8765       # HTTP (Πίνακας Ελέγχου, προβολή, συγχρονισμός)
 PORT = int(os.environ.get("ITNOW_PORT", CENTRAL_PORT))  # αλλάζει μόνο για δοκιμές σε ίδιο PC
 DISCOVERY_PORT = 8766     # UDP: οι οθόνες βρίσκουν τον κεντρικό
@@ -279,10 +279,12 @@ def sync_once():
 
     # εντολές από τον κεντρικό
     cmd = data.get("command")
-    if cmd == "start" or cmd == "restart":
+    if cmd in ("start", "restart"):
         start_show()
+        remember_show(True)
     elif cmd == "stop":
         stop_show()
+        remember_show(False)
     # αυτόματη αναβάθμιση από τον κεντρικό
     if FROZEN and data.get("exe") and vtuple(data.get("version")) > vtuple(VERSION):
         apply_update(base + "/exe")
@@ -321,6 +323,19 @@ def find_browser():
             if base and os.path.isfile(os.path.join(base, rel)):
                 return os.path.join(base, rel)
     return None
+
+
+def play_on_boot():
+    """Ξεκινά η προβολή με τα Windows; Οθόνες: ναι. Κεντρικός: μόνο αν την άφησαν να παίζει."""
+    cfg = load_config()
+    v = cfg.get("play_on_boot")
+    return (cfg["mode"] == "client") if v is None else bool(v)
+
+
+def remember_show(on):
+    cfg = load_config()
+    cfg["play_on_boot"] = bool(on)
+    save_config(cfg)
 
 
 def start_show():
@@ -562,11 +577,13 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/show":
             ok = start_show() if body.get("action") == "start" else (stop_show() or True)
+            remember_show(show_running)
             return self.send_json({"ok": ok, "show_running": show_running})
         if path == "/api/screen":  # εντολή σε οθόνη του δικτύου
             name, action = body.get("name", ""), body.get("action", "")
             if name == cfg["screen_name"]:
                 ok = start_show() if action in ("start", "restart") else (stop_show() or True)
+                remember_show(show_running)
                 return self.send_json({"ok": ok})
             if action == "forget":
                 cfg["known_screens"] = [n for n in cfg["known_screens"] if n != name]
@@ -650,12 +667,30 @@ def _safe(fn):
         client_state.update(connected=False, error=str(e))
 
 
+DEMO_SRC = os.path.join(getattr(sys, "_MEIPASS", BASE), "demo")
+DEMO_NAME = "Demo"
+
+
+def install_demo(cfg):
+    """Πρώτη εκκίνηση κεντρικού: φάκελος «Demo» με 5 εικόνες για έλεγχο ότι παίζουν οι οθόνες."""
+    if cfg.get("demo_done") or not os.path.isdir(DEMO_SRC):
+        return
+    import shutil
+    dest = os.path.join(MEDIA, GROUPS[0], DEMO_NAME)
+    os.makedirs(dest, exist_ok=True)
+    for name in sorted(os.listdir(DEMO_SRC)):
+        shutil.copy2(os.path.join(DEMO_SRC, name), os.path.join(dest, name))
+    cfg["demo_done"] = True
+    save_config(cfg)
+
+
 def make_server():
     """Κεντρικός: ακούει σε όλο το δίκτυο (για τις οθόνες). Οθόνη: μόνο τοπικά."""
     cfg = load_config()
     if cfg["mode"] == "central":
         for g in GROUPS:
             os.makedirs(os.path.join(MEDIA, g), exist_ok=True)
+        install_demo(cfg)
     host = "127.0.0.1" if cfg["mode"] == "client" else "0.0.0.0"
     srv = ThreadingHTTPServer((host, PORT), Handler)
     threading.Thread(target=discovery_responder, daemon=True).start()

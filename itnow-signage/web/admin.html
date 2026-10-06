@@ -281,7 +281,7 @@ const ICON_SCREEN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"
 function renderScreens() {
   $('screens').innerHTML = data.screens.map(s => {
     const st = !s.online ? ['Εκτός σύνδεσης', ''] : s.running ? ['Παίζει', 'play'] : ['Συνδεδεμένη', 'on'];
-    const seen = s.local ? 'Κεντρικός · αυτός ο υπολογιστής' : !s.online && s.last_seen ? 'Τελευταία φορά: ' + new Date(s.last_seen * 1000).toLocaleString('el-GR') : (s.ip || '');
+    const seen = s.local ? 'Κεντρικός' : !s.online && s.last_seen ? 'Τελευταία φορά: ' + new Date(s.last_seen * 1000).toLocaleString('el-GR') : (s.ip || '');
     return `<div class="card scr ${s.online ? 'on' : ''}">
       <div class="scr-top"><div class="scr-ic">${ICON_SCREEN}</div>
         <div style="min-width:0"><div class="scr-name">${esc(s.name)}</div>
